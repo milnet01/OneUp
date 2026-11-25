@@ -119,7 +119,7 @@ Follow the established `_set_*_checked` / `_refresh_*_label` / `on_*_toggled` sh
     no-op.
   - `on=False`: persist `tray_enabled=False`; **also remove Start at boot** (call
     `_remove_autostart()` and reflect `startboot_btn` off via a `blockSignals` set, mirroring
-    `_set_autoupdate_checked`); then tear down everything `_ensure_tray()`
+    `set_autoupdate_checked`); then tear down everything `_ensure_tray()`
     set up (the reverse of §4): **stop `self._tray_timer`** (so the periodic check stops
     shelling out once the feature is off), leave the single-instance `QLocalServer` alone
     (it belongs to the process, §8), hide the tray icon (`self._tray.hide()`, drop the reference),
@@ -156,7 +156,7 @@ so a programmatic reflect never re-fires the other handler.
   X-GNOME-Autostart-enabled=true
   ```
 - **`_remove_autostart()`** — unlink the file, ignoring a missing file (like
-  `_remove_user_timer`).
+  `remove_user_timer`).
 
 **Exec quoting is NOT the systemd form.** `_headless_command(flag)` escapes
 for **systemd** unit files — it doubles `$`→`$$` and `%`→`%%` because systemd does env-var and
@@ -237,12 +237,12 @@ window's task rows / progress bar / interactive-check state:
   `handle_marker` already does: strip the `@@CHECK@@|` prefix, `split("|")`,
   and when field 0 is `TOTAL` read the integer in **field 1** (ignore the trailing
   `updates available` label). Do **not** do a naïve `int(<everything after the prefix>)` — that
-  would choke on the third field. Call `_apply_tray_total(n)`; ignore every other line (do
+  would choke on the third field. Call `apply_tray_total(n)`; ignore every other line (do
   **not** append to the window log).
 - **`_on_traycheck_finished()`** — release the finished `QProcess` (`deleteLater()` + drop
   `self._traycheck_proc`), mirroring `_on_size_finished`, so a weeks-long
   resident session (~4 checks/day) doesn't accumulate dead QProcess objects on the window.
-- **`_apply_tray_total(n: int)`** — store `self._tray_total = n` and `self._tray_checked_at =
+- **`apply_tray_total(n: int)`** — store `self._tray_total = n` and `self._tray_checked_at =
   now`; if the tray exists, set `_tray_icon(n > 0)` and the matching tooltip.
 - **Cadence:** **one** `QTimer` (`self._tray_timer`) started by `_ensure_tray()` (§4, step 4).
   Its first fire is short — `TRAY_INITIAL_DELAY_MS` (a few seconds, so login isn't slowed) — and
@@ -258,13 +258,13 @@ a fresh total, refresh the tray too, so the icon doesn't lie while the window is
 
 These hooks live in `on_finished`, which already branches on
 `self._check_mode`:
-- **Check branch** (`_check_mode` true): `_apply_tray_total(int(self._installed_count) if
+- **Check branch** (`_check_mode` true): `apply_tray_total(int(self._installed_count) if
   self._installed_count.isdecimal() else 0)` — mirror the `.isdecimal()` guard `on_finished`
   itself uses (`_installed_count` is a free-form string, so a bare `int(...)` can
   raise). Both read `.isdigit()` until ONEUP-0153: that also accepts superscript digits,
   which `int()` refuses. The count came from the CHECK/TOTAL handling.
 - **Run branch** (`_check_mode` false) **and only when the run succeeded** (`ok`): set the tray
-  neutral (updates were just installed → nothing waiting): `_apply_tray_total(0)`. On a **failed**
+  neutral (updates were just installed → nothing waiting): `apply_tray_total(0)`. On a **failed**
   run, do **not** touch the tray — its last known state stands (blanking it would falsely claim
   "up to date" after a failure).
 
@@ -273,13 +273,12 @@ These hooks live in `on_finished`, which already branches on
 `closeEvent` becomes: **if** the tray is live (`self._tray is not None`),
 save geometry, `event.ignore()`, `self.hide()`, and — **once per session** — fire a
 close-to-tray hint ("OneUp is still running in the tray — right-click the icon to quit."),
-gated by a `self._tray_hint_shown` flag. That hint is a **direct** `notify-send` — the same
-fixed-argv `Popen` pattern as `_notify_when_away`, keeping that method's
-`shutil.which("notify-send")` presence check but dropping its `isActiveWindow()`
-half — **not** a call to `_notify_when_away` itself, whose active-window guard
-would suppress it, since the window is still the active window at close time. (A missing
-`notify-send` is doubly safe: skipped by the `which` check and, failing that, swallowed by the
-pattern's `except OSError`.) **Else** unchanged (save geometry +
+gated by a `self._tray_hint_shown` flag. That hint is a **direct** `notify-send` through
+`tray.notify`, the helper `_notify_when_away` sends through too, with its
+`shutil.which("notify-send")` presence check — **not** a call to `_notify_when_away`
+itself, whose active-window guard would suppress it, since the window is still the active
+window at close time. (A missing `notify-send` is doubly safe: skipped by the `which` check
+and, failing that, the helper swallows the `OSError`.) **Else** unchanged (save geometry +
 `super().closeEvent(event)`; the app quits because a tray isn't holding it open).
 
 ### 7. `main()` wiring
@@ -353,9 +352,9 @@ is a `QLocalServer` in `oneup/gui/tray.py`:
 | Situation | Behaviour |
 |-----------|-----------|
 | No system tray on this desktop | `isSystemTrayAvailable()` false → both new toggles disabled with a note; no tray built; `--tray`/`tray_enabled` degrade to a normal shown window. |
-| `_install_autostart` raises `OSError` (can't write `~/.config/autostart`) | Caught, `QMessageBox.warning`, `startboot_btn` reverted to off (never shows on after a failed write) — mirrors the `_install_user_timer` OSError catch/warn (the button revert is added by this handler). |
+| `_install_autostart` raises `OSError` (can't write `~/.config/autostart`) | Caught, `QMessageBox.warning`, `startboot_btn` reverted to off (never shows on after a failed write) — mirrors the `install_user_timer` OSError catch/warn (the button revert is added by this handler). |
 | `ENGINE` missing when a tray check fires | `_tray_check()` early-returns (like `request_size`); icon stays at its last known state; tooltip unchanged. |
-| `--check` exits non-zero / emits no `TOTAL` | No `_apply_tray_total` call → icon unchanged (last known / neutral). No crash: the parser only acts on a well-formed `TOTAL` line. |
+| `--check` exits non-zero / emits no `TOTAL` | No `apply_tray_total` call → icon unchanged (last known / neutral). No crash: the parser only acts on a well-formed `TOTAL` line. |
 | Second `oneup` launched while resident | Single-instance guard raises the existing window and the second process exits 0 — no duplicate tray icon. |
 | Tray turned off mid-session with window hidden | Window is re-shown; quit-on-last-window-closed restored; autostart removed. |
 | Tray host (panel) crashes while the window is hidden | App is briefly invisible with no menu (outside user control). Recovery: relaunch `oneup` — the single-instance guard (§8) re-shows the window; Qt also re-attaches the icon when a new tray host registers. Bounds the "never invisible" invariant. |
@@ -365,7 +364,7 @@ is a `QLocalServer` in `oneup/gui/tray.py`:
 
 CI runs headless (offscreen), where `isSystemTrayAvailable()` is typically false and no real
 tray exists. Tests therefore target the **pure/file helpers and coupling**, stubbing the tray
-build (the existing suite already monkeypatches `_install_user_timer` etc.):
+build (the existing suite already monkeypatches `install_user_timer` etc.):
 
 - **Autostart file, install/remove:** with `HOME` pointed at the sandbox, `_install_autostart()`
   writes `…/autostart/za.co.antsprojectshub.OneUp-tray.desktop` containing `--tray`;

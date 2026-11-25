@@ -90,7 +90,7 @@ config.
   popup inside the trap.
 - **Alias validation (bash).** Before any alias reaches a privileged `modifyrepo`,
   it is checked against `^[A-Za-z0-9][A-Za-z0-9:@._+-]*$` — the **identical**
-  character class as the GUI's `_ALIAS_RE` (`updater.py`, applied with
+  character class as the GUI's `ALIAS_RE` (`updater.py`, applied with
   `.fullmatch()` in `_build_apply_command`), which the Repo-manager
   already uses to refuse `evil; rm -rf /`. Matching it exactly matters: a real
   alias containing `@` or `+` must not be refused by the engine when the GUI would

@@ -1,8 +1,9 @@
 """Reading what the engine said, and saying it in English.
 
 `docs/reference/marker-protocol.md` is the contract; this module holds the
-splitting of a marker line into its name and fields, and the three formatters
-that turn a payload into the words the window shows.
+splitting of a marker line into its name and fields, and the functions that turn
+a payload into the words the window shows: the hint, check, reboot-reason and
+notification sentences, the step badge, and the duration and size figures.
 """
 from __future__ import annotations
 
@@ -525,6 +526,17 @@ def split_marker(line: str) -> tuple[str, list[str], str] | None:
     return tag, rest.split("|"), rest
 
 
+def check_count(parts: list[str]) -> tuple[int, bool]:
+    """A `@@CHECK@@|key|count|text[|basis]` line's count and whether it is a floor.
+
+    The count is 0 where the field is not a number. `at-least` in the basis field
+    means the rootless floor, not the update's own count (ONEUP-0329). The window,
+    the tray and the headless check all read the marker through this."""
+    count = parts[1] if len(parts) > 1 else ""
+    return (int(count) if count.isdecimal() else 0,
+            len(parts) > 3 and parts[3] == "at-least")
+
+
 # @@STEP_END@@'s codes and the badge each one shows (ONEUP-0072 §4.1's closed set;
 # ONEUP-0108 §4.1). The second value is how many arguments the code carries — a
 # step with no number sends a different code, never the same one without it — and
@@ -543,7 +555,7 @@ STEP_BADGES: dict[str, tuple[int, str]] = {
 }
 
 
-def _step_badge(status: str, code: str, args: list[str]) -> str:
+def step_badge(status: str, code: str, args: list[str]) -> str:
     """A short per-row badge for a finished step, from its @@STEP_END@@ status,
     code and arguments — e.g. '3 installed', 'Up to date', 'Failed', 'Skipped'.
 
@@ -569,7 +581,7 @@ def _step_badge(status: str, code: str, args: list[str]) -> str:
     return badge.format(count=args[0]) if args else badge
 
 
-def _format_duration(secs: int) -> str:
+def format_duration(secs: int) -> str:
     """A compact human duration: '<1s', '42s', '1m 5s'."""
     if secs < 1:
         return "<1s"
@@ -577,13 +589,13 @@ def _format_duration(secs: int) -> str:
         return f"{secs}s"
     return f"{secs // 60}m {secs % 60}s"
 
-# The widest text `_format_size` prints: just under a unit's top rounds up to "1024.0".
+# The widest text `format_size` prints: just under a unit's top rounds up to "1024.0".
 # The one sample anything sizes a size's place by (ONEUP-0403); a narrower one clipped a
 # leading digit, the misreading ONEUP-0356 set out to prevent.
 WIDEST_SIZE = "1024.0 MiB"
 
 
-def _format_size(n: int) -> str:
+def format_size(n: int) -> str:
     """A compact human size: '900 B', '57.6 KiB', '1.0 MiB', '1.4 GiB'.
 
     Binary units, labelled as such (ONEUP-0190) — the same MiB zypper prints in

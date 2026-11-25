@@ -95,7 +95,7 @@ by pattern: `env LC_ALL=C bash -c *` is a root shell in sudoers clothing.
 
 ### 2.4 What it costs the unattended run
 
-`_install_user_timer` in `updater.py` writes `oneup-update.service` as a `systemd --user`
+`install_user_timer` in `updater.py` writes `oneup-update.service` as a `systemd --user`
 oneshot running the engine headless, and ONEUP-0022 gated that feature on passwordless
 precisely so no dialog could appear. With these gaps, one does: the timer fires weekly, the
 engine reaches the first repository refresh, `sudo` finds no terminal, launches the askpass
@@ -106,7 +106,7 @@ nobody started. Nothing is installed and nothing is said. That is `workflow.md` 
 ### 2.5 The half of the coupling that is missing (ONEUP-0099)
 
 `on_auth_toggled`'s off arm already stands the timer down when the user **clicks**
-*Passwordless* off: `_remove_user_timer("oneup-update")`, uncheck, and a message saying
+*Passwordless* off: `remove_user_timer("oneup-update")`, uncheck, and a message saying
 why. It is deliberately hooked to the revoke action rather than the toggle signal.
 
 Nothing stands it down when the app merely **discovers** passwordless is off.
@@ -474,9 +474,9 @@ gains the three rows.
 
 `on_auth_toggled`'s off arm and `_on_auth_status_finished` need the same steps, so they get
 one helper rather than a second copy — `_stand_down_autoupdate`, holding the guard (now
-`_autoupdate_may_be_enabled()`, so a timed-out answer still tries while the timer's unit
+`autoupdate_may_be_enabled()`, so a timed-out answer still tries while the timer's unit
 file exists, ONEUP-0403 and ONEUP-0427), the
-`_remove_user_timer("oneup-update")` call, the
+`remove_user_timer("oneup-update")` call, the
 uncheck and the message box verbatim. The `self._pending_autoupdate = False` line stays at
 the `on_auth_toggled` call site: it is about a revoke racing an enable, not about standing
 the timer down, and `_on_auth_status_finished` already consumes that latch itself.
@@ -502,7 +502,7 @@ latch and clears it afterwards. Move the check inside and that click path inheri
 user who toggles automatic updates on and then, while the probe is still in flight, toggles
 Passwordless off would keep an enabled weekly timer across a revoke — exactly the coupling
 §2.5 describes as already correct, silently broken by a fix aimed elsewhere. So the helper
-stays the three existing statements behind its `_autoupdate_may_be_enabled()` guard,
+stays the three existing statements behind its `autoupdate_may_be_enabled()` guard,
 and the call site reads `if "@@AUTH@@|off" in out and not win._pending_autoupdate:`.
 
 The latch condition is needed on the discovery path because `_autoupdate_enabled()` shells
@@ -631,11 +631,11 @@ evidence is §4.2's measurement, recorded there because no test may reproduce it
   root-owned executable behind after the user withdrew consent (`security.md` §5.5).
 
 - **INV-11** An enabled weekly update never outlives the passwordless rule it needs.
-  *Test (GUI):* with `_autoupdate_enabled` stubbed true, `_remove_user_timer` spied and
+  *Test (GUI):* with `_autoupdate_enabled` stubbed true, `remove_user_timer` spied and
   the informational box stubbed, `_on_auth_status_finished` is fed output carrying
-  `@@AUTH@@|off`; the test asserts `_remove_user_timer` was called with `oneup-update` and
+  `@@AUTH@@|off`; the test asserts `remove_user_timer` was called with `oneup-update` and
   the toggle is unchecked. Both stubs are required, not tidiness: the real
-  `_remove_user_timer` shells out to `systemctl --user disable --now` and would disable the
+  `remove_user_timer` shells out to `systemctl --user disable --now` and would disable the
   developer's own timer (`testing.md` §2), and `QMessageBox.information` blocks. Breaks the
   ONEUP-0099 case exactly: a rule removed outside OneUp leaves a timer firing weekly into a
   dialog nobody answers.
@@ -646,12 +646,12 @@ evidence is §4.2's measurement, recorded there because no test may reproduce it
   set — the ordinary failed enable. (b) `_autoupdate_enabled` stubbed **true** with
   `_pending_autoupdate` set — a timer the toggle did not know about, which is the half a
   false-only fixture leaves untested and the one that would answer an *enable* with a
-  "turned off" dialog. Both assert `_remove_user_timer` was not called, no box was raised,
-  and `_set_autoupdate_checked` (spied) was called exactly once, with `False`.
+  "turned off" dialog. Both assert `remove_user_timer` was not called, no box was raised,
+  and `set_autoupdate_checked` (spied) was called exactly once, with `False`.
 
 - **INV-13** A probe that failed to run never stands the timer down.
   *Test (GUI):* `_on_auth_status_finished` is fed empty output — the shape a crashed or
-  killed engine produces — with `_autoupdate_enabled` stubbed true. `_remove_user_timer`
+  killed engine produces — with `_autoupdate_enabled` stubbed true. `remove_user_timer`
   is **not** called and no box is raised, while the toggle still reflects off. Breaks the
   `"@@AUTH@@|on" in out` reading of "off", which would delete a working weekly update
   because a subprocess failed to start.
@@ -675,7 +675,7 @@ evidence is §4.2's measurement, recorded there because no test may reproduce it
 | …and does not appear later | some other package creates `/usr/libexec` after the grant | `GUARD_FILE` is recomputed per run, so it moves: `guard_current` reads a path that never existed and the toggle flips off. Revoke removes **both** candidate paths (§4.3) so the older one cannot be stranded |
 | `PATH` is the same at grant and at run | the grant runs from the desktop-launched GUI and the run from a terminal, with different `PATH`s | `command -v` could resolve a binary differently, changing the `# oneup-auth-scope:` line and mismatching the stamp. Fails safe — one labelled prompt, and re-toggling re-grants — but it is a false negative with no user-visible cause, which is why §4.2 records the resolution difference. Since ONEUP-0408 the Python engine, and since ONEUP-0417 the Bash fallback, resolve in the system's own directories, never `PATH`, so neither meets this now |
 | The guard survives as root-owned | someone chmods it writable | it stops matching only if its *content* changes; a writable guard is a machine already compromised at root level — the drop-in's `zypper` entry is the larger hole either way |
-| `_remove_user_timer` succeeds | no user bus, or `systemctl --user disable` fails or times out | It returns False unless `systemctl` then says the timer is off. Both paths leave the switch on and say the timer could not be switched off, with the command to do it by hand (ONEUP-0403). A timed-out `is-enabled` reads as "maybe on" while `~/.config/systemd/user/oneup-update.timer` exists, so the stand-down still tries; with no unit file there is no timer, and a never-enabled switch stays off (ONEUP-0427). A missing `systemctl` reads as no answer |
+| `remove_user_timer` succeeds | no user bus, or `systemctl --user disable` fails or times out | It returns False unless `systemctl` then says the timer is off. Both paths leave the switch on and say the timer could not be switched off, with the command to do it by hand (ONEUP-0403). A timed-out `is-enabled` reads as "maybe on" while `~/.config/systemd/user/oneup-update.timer` exists, so the stand-down still tries; with no unit file there is no timer, and a never-enabled switch stays off (ONEUP-0427). A missing `systemctl` reads as no answer |
 | `sudo` honours `secure_path` | a site that disabled it | the bare `zypper` word in two entries could resolve elsewhere. Pre-existing (`env LC_ALL=C zypper *` has always relied on it) and recorded in `security.md` §5.2 rather than newly introduced |
 
 ## 7. Tests
@@ -706,7 +706,7 @@ GUI scenarios in `tests/gui-smoke.py`, beside the existing auto-update coupling 
 **The GUI suite needs a module-wide neutralisation, for the same reason and in the same
 place as the network stub.** `Updater.__init__` calls `_query_auth_status`, and
 `tests/gui-smoke.py` constructs the window 56 times — so once §4.7 lands, any of those
-probes can reach `_stand_down_autoupdate` and the real `_remove_user_timer`, which shells
+probes can reach `_stand_down_autoupdate` and the real `remove_user_timer`, which shells
 out to `systemctl --user disable --now` against the developer's own session. `main()`
 already replaces `Updater._check_app_update` with a no-op before its first
 `updater.Updater()` (`tests/gui-smoke.py`, the ONEUP-0090 stub); `_stand_down_autoupdate`

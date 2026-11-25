@@ -62,7 +62,7 @@ needed, and none should be written.
 
 **Already correct — no change needed here, despite the roadmap naming it.** The
 bullet lists "red/green step badges" as a colour-only gap, but per-step outcomes
-are already **text**: `_step_badge` returns "Failed", "Up to date", "3 installed",
+are already **text**: `step_badge` returns "Failed", "Up to date", "3 installed",
 and the badge's colours come from one theme pair
 (`badgebg`/`badgefg`) that does not vary by outcome. The reboot/warning banners
 likewise already carry a `⚠` glyph plus prose. So the
@@ -202,11 +202,11 @@ scope*:
 | --- | --- | --- |
 | `STEP_BEGIN` | `"<label>, step <i> of <n>"` | `self.status` (set immediately before) |
 | `STEP_END` | `"<task title>: <badge>"` | the row's `badge` label |
-| `_show_warning` | `"Warning: <text>"` | `self.warn_label` |
+| `show_warning` | `"Warning: <text>"` | `self.warn_label` |
 | `on_finished` (run) | the summary line already set on `self.status` | `self.status` |
 | `on_finished` (check) | the "N update(s) available" / "up to date" line | `self.status` |
 
-Three ordering rules, because `_show_warning` fires from four sites — two of them
+Three ordering rules, because `show_warning` fires from four sites — two of them
 *inside* `on_finished` — and
 `QAccessibleAnnouncementEvent` defaults to **Polite** priority, meaning a later
 announcement can supersede an earlier one:

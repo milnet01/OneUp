@@ -14,14 +14,13 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from datetime import datetime
 
 import shiboken6
 from PySide6.QtCore import QCoreApplication, QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox
 
 from ..engine import route
-from . import autostart, markers, paths
+from . import autostart, markers, paths, settings_dialog
 
 # Where a Passwordless grant put its guard: the two paths the engine's `--revoke-auth`
 # sweeps (`actions.revoke_auth`). Module constants so a test can point them at scratch.
@@ -42,9 +41,7 @@ def _refresh_auth_label(win):
 
 def _set_auth_checked(win, on: bool):
     """Reflect the real state on the toggle WITHOUT re-triggering grant/revoke."""
-    win.auth_btn.blockSignals(True)
-    win.auth_btn.setChecked(on)
-    win.auth_btn.blockSignals(False)
+    settings_dialog.set_quietly(win.auth_btn, on)
     _refresh_auth_label(win)
 
 
@@ -58,7 +55,7 @@ def _query_auth_status(win):
     enable as off: no answer would ever come, and the switch stayed greyed out for
     the rest of the session (ONEUP-0398)."""
     if not paths.engine_available():
-        _probe_not_started(win)
+        _settle_pending_off(win)
         return
     p = getattr(win, "_authstat_proc", None)
     if p is not None and p.state() != QProcess.NotRunning:
@@ -69,31 +66,25 @@ def _query_auth_status(win):
     # Quiet unless the user is waiting on the answer: a background probe has nobody
     # to tell, but a click on the automatic-updates switch deserves the reason.
     if not paths.log_dir_ready(win, quiet=not win._pending_autoupdate):
-        _probe_not_started(win)
+        _settle_pending_off(win)
         return
-    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.finished.connect(lambda _c, _s, pr=p: _on_auth_status_finished(win, pr))
     p.errorOccurred.connect(lambda err: err == QProcess.ProcessError.FailedToStart
-                            and _probe_not_started(win))
+                            and _settle_pending_off(win))
     win._authstat_proc = p
-    argv = paths.engine_argv(
-        "--auth-status", f"--log={paths.STATE_LOG_DIR / f'{stamp}.auth.log'}")
+    argv = paths.engine_argv("--auth-status", f"--log={paths.new_log('auth')}")
     p.start(argv[0], argv[1:])
 
 
-def _probe_not_started(win):
-    """No probe answer will come: settle a pending auto-update enable as off."""
-    _settle_pending_off(win)
-
-
 def _settle_pending_off(win):
-    """Settle a pending auto-update enable as off: nothing will answer it."""
+    """Settle a pending auto-update enable as off: nothing will answer it — no probe
+    started, or no grant or revoke could."""
     if win._pending_autoupdate:
         win._pending_autoupdate = False
         win.autoupdate_btn.setEnabled(True)
-        autostart._set_autoupdate_checked(win, False)
+        autostart.set_autoupdate_checked(win, False)
 
 
 def _on_auth_status_finished(win, proc: QProcess):
@@ -124,43 +115,55 @@ def _on_auth_status_finished(win, proc: QProcess):
     # fail to speak — a crashed engine, a killed QProcess, truncated output — reads as
     # "not on", and deleting the user's weekly timer because a subprocess didn't start
     # is destructive where the toggle reflect above is merely cosmetic and win-
-    # correcting. Not while an enable is in flight either: _autoupdate_enabled() shells
-    # out to systemctl and so reports the machine, not the toggle, so a timer enabled
-    # outside OneUp would answer the user's "on" click with "we switched it off".
+    # correcting. Not while an enable is in flight either: the stand-down asks
+    # systemctl (autostart.autoupdate_may_be_enabled), which reports the machine, not
+    # the toggle, so a timer enabled outside OneUp would answer the user's "on" click
+    # with "we switched it off".
     if "@@AUTH@@|off" in out and not win._pending_autoupdate:
-        _stand_down_autoupdate(win, QCoreApplication.translate(
-            "auth", "This computer no longer allows updates without a password.\n\n")
-            if win._service_route else QCoreApplication.translate(
-            "auth", "OneUp's passwordless rule is no longer active.\n\n"))
-    # Re-enable the auto-update toggle if a pending enable had disabled it.
+        if win._service_route:
+            lead = QCoreApplication.translate(
+                "auth", "This computer no longer allows updates without a password.\n\n")
+        else:
+            lead = QCoreApplication.translate(
+                "auth", "OneUp's passwordless rule is no longer active.\n\n")
+        _stand_down_autoupdate(win, lead)
+    # The switch is greyed out only while an enable waits; giving it back is harmless
+    # otherwise, so it is not made conditional.
     win.autoupdate_btn.setEnabled(True)
     if win._pending_autoupdate:
-        win._pending_autoupdate = False        # consume unconditionally
-        if is_on:
-            enabled = autostart._install_user_timer(
-                win, "oneup-update", *autostart.TIMERS["oneup-update"])
-            autostart._set_autoupdate_checked(win, bool(enabled))
-            if enabled is False:      # None: the install has already said why
-                QMessageBox.warning(
-                    win, QCoreApplication.translate("auth", "Could not enable automatic updates"),
-                    QCoreApplication.translate(
-                        "auth",
-                        "The weekly update timer could not be enabled."))
-        else:
-            # Passwordless came back off (popup cancelled / visudo rejected / failed).
-            # The grant's @@HINT@@ was already surfaced in _on_auth_finished. On the
-            # service route there was no grant, so nothing has said why yet.
-            autostart._set_autoupdate_checked(win, False)
-            if win._service_route:
-                QMessageBox.information(
-                    win, QCoreApplication.translate(
-                        "auth", "Automatic updates can't be turned on"),
-                    QCoreApplication.translate(
-                        "auth",
-                        "This computer asks for a password before it installs "
-                        "updates, and nobody is there to type it during an automatic "
-                        "update. Ask whoever looks after this computer to allow "
-                        "updates without a password, then try again."))
+        _settle_pending_enable(win, is_on)
+
+
+def _settle_pending_enable(win, is_on: bool):
+    """The probe answered an enable that was waiting on it: install the weekly update
+    timer if passwordless is on, otherwise leave automatic updates off and, on the
+    service route, say why."""
+    win._pending_autoupdate = False        # consume unconditionally
+    if is_on:
+        enabled = autostart.install_user_timer(
+            win, "oneup-update", *autostart.TIMERS["oneup-update"])
+        autostart.set_autoupdate_checked(win, bool(enabled))
+        if enabled is False:      # None: the install has already said why
+            QMessageBox.warning(
+                win, QCoreApplication.translate("auth", "Could not enable automatic updates"),
+                QCoreApplication.translate(
+                    "auth",
+                    "The weekly update timer could not be enabled."))
+    else:
+        # Passwordless came back off (popup cancelled / visudo rejected / failed).
+        # The grant's @@HINT@@ was already surfaced in _on_auth_finished. On the
+        # service route there was no grant, so nothing has said why yet.
+        autostart.set_autoupdate_checked(win, False)
+        if win._service_route:
+            QMessageBox.information(
+                win, QCoreApplication.translate(
+                    "auth", "Automatic updates can't be turned on"),
+                QCoreApplication.translate(
+                    "auth",
+                    "This computer asks for a password before it installs "
+                    "updates, and nobody is there to type it during an automatic "
+                    "update. Ask whoever looks after this computer to allow "
+                    "updates without a password, then try again."))
 
 
 def _confirm_passwordless(win, lead: str = "") -> bool:
@@ -203,10 +206,10 @@ def _stand_down_autoupdate(win, lead: str = ""):
     stands the timer down regardless of the latch and clears it afterwards, so moving
     the check inside would let a revoke racing an enable leave an enabled weekly timer
     behind — the exact coupling this method exists to guarantee."""
-    if not autostart._autoupdate_may_be_enabled():
+    if not autostart.autoupdate_may_be_enabled():
         return
-    if not autostart._remove_user_timer("oneup-update"):
-        autostart._set_autoupdate_checked(win, True)
+    if not autostart.remove_user_timer("oneup-update"):
+        autostart.set_autoupdate_checked(win, True)
         QMessageBox.warning(
             win, QCoreApplication.translate("auth", "Could not turn off automatic updates"),
             QCoreApplication.translate(
@@ -215,7 +218,7 @@ def _stand_down_autoupdate(win, lead: str = ""):
                 "timer could not be switched off. Turn them off in Settings, or run:\n"
                 "systemctl --user disable --now oneup-update.timer").format(lead=lead))
         return
-    autostart._set_autoupdate_checked(win, False)
+    autostart.set_autoupdate_checked(win, False)
     if win._service_route:
         text = QCoreApplication.translate(
             "auth",
@@ -274,15 +277,13 @@ def _run_auth(win, action: str, status_text: str,
     win.auth_btn.setEnabled(False)
     win.status.setText(status_text)
     win._settings_status(status_text)
-    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.finished.connect(lambda _c, _s, pr=p: _on_auth_finished(win, pr))
     p.errorOccurred.connect(lambda err, pr=p: err == QProcess.FailedToStart
                             and _on_auth_not_started(win, pr))
     win._authchg_proc = p
-    log = paths.STATE_LOG_DIR / f"{stamp}.auth.log"
-    argv = paths.engine_argv(action, f"--log={log}", env=env)
+    argv = paths.engine_argv(action, f"--log={paths.new_log('auth')}", env=env)
     p.start(argv[0], argv[1:])
     return p
 

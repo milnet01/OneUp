@@ -284,7 +284,7 @@ Three places show it, all from that one value:
    with no phase yet, or none at all, shows its `IN_PROGRESS` phrase from
    `oneup/gui/steps.py` as its phase word. During a run, a selected
    step not yet started says *Waiting*; at idle and during a check the badge says what it
-   says today; after `STEP_END` it says what `markers._step_badge` says,
+   says today; after `STEP_END` it says what `markers.step_badge` says,
    as today. One text in every form; a narrow form elides it.
 
 *(ONEUP-0322)* **The words follow the half the value is in, not the line that arrived.** A
@@ -512,12 +512,12 @@ first action line, or at the pass's end. So it leaves *now* while it waits to in
   carries its list's count. ~~Its three figures are *Downloaded*, *Installed* and
   *Download*.~~ *(ONEUP-0306)* Its three figure boxes read from the running step's last
   `PROGRESS`: *Packages* is its `done` of `total`, in the half the badge names;
-  *Downloaded* is §4.1.1's byte figure of `bytes_total`, printed with `_format_size`;
+  *Downloaded* is §4.1.1's byte figure of `bytes_total`, printed with `format_size`;
   *Time left* is §4.1.2's estimate. A box whose figure is not known reads *"not known"*.
   *(ONEUP-0322)* With a `total` of 0, *Packages* shows the running tally, *"37 so far"*
   (`docs/reference/marker-protocol.md` §4.3).
 - **A total size counts only known sizes.** Where any package's size is `0`, the summary
-  says so: *"17.5 MiB, some sizes not known"*. Sizes print with `_format_size` in
+  says so: *"17.5 MiB, some sizes not known"*. Sizes print with `format_size` in
   `oneup/gui/markers.py`. *(ONEUP-0306)* It gains one decimal place for KiB and MiB, as
   every sketch prints them.
 - **Every package view shows the state word** from `STATE_WORDS`, as text, on every

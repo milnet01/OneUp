@@ -105,8 +105,8 @@ summary):
 ## GUI change (`updater.py`)
 
 - **Shared timer helper.** The weekly-check install/remove code in `on_autocheck_toggled`
-  is refactored into `_install_user_timer(basename, description, exec_flag)` /
-  `_remove_user_timer(basename)`, then called for both `oneup-check` (`--check`) and the new
+  is refactored into `install_user_timer(basename, description, exec_flag)` /
+  `remove_user_timer(basename)`, then called for both `oneup-check` (`--check`) and the new
   `oneup-update` (`--update`). Existing weekly-check behaviour is unchanged (the extracted
   helper produces the same unit files).
 - **Shared command builder.** `_autocheck_command()` is generalised to
@@ -159,13 +159,13 @@ summary):
     - reflected **on** → start a fresh `--auth-status` probe (`_query_auth_status`) — **no**
       direct install — so a stale-on switch can't install a timer the drop-in won't back.
   - `on_autoupdate_toggled(on=False)` (user disables auto-update): remove the update timer
-    (`_remove_user_timer`); if a `_pending_autoupdate` latch is somehow still set (an enable the
+    (`remove_user_timer`); if a `_pending_autoupdate` latch is somehow still set (an enable the
     user aborted), clear it so a late settle can't re-install. No passwordless change.
   - **The settle (`_on_auth_status_finished`) is the single install gate.** After it updates
     the passwordless switch and re-enables the auto-update toggle, **if `_pending_autoupdate`
     is set** it consumes the latch (clearing it unconditionally, so a startup or dialog-open
     probe that carries no latch is a no-op here): if the just-settled state is passwordless-on,
-    install the update timer via `_install_user_timer` and set the auto-update toggle on **iff
+    install the update timer via `install_user_timer` and set the auto-update toggle on **iff
     that install reports the timer `enabled`** (the same success check the failure table's
     OSError / `systemctl enable` rows rely on); if passwordless came back off (popup cancelled,
     `visudo` rejected, grant/probe failed) **or** the install failed, leave auto-update off and
@@ -204,8 +204,8 @@ auto-update toggle **off** and tell the user why — never a silent half-state.
 | Engine binary missing (`ENGINE.exists()` false) | `on_autoupdate_toggled(on=True)`'s up-front guard reverts the toggle to off and returns before any latch/disable (mirrors `on_auth_toggled`) — so the toggle is never left stuck disabled by an async chain that would hit `_query_auth_status`'s early return and fire no settle. |
 | Combined-enable dialog cancelled | Both stay off; no grant started, no latch set. |
 | Passwordless popup cancelled / `visudo` rejects / grant process fails | Re-probe reports passwordless **off**; the pending-enable latch resolves to "leave auto-update off" and surfaces the grant's `@@HINT@@`. |
-| `_install_user_timer` raises `OSError` (can't write `~/.config/systemd/user`) | Caught and shown via `QMessageBox.warning`, then the toggle is reverted to off. **New logic:** the existing `on_autocheck_toggled` catches `OSError` and warns but does *not* revert its toggle; auto-update adds the explicit revert so it never shows on after a failed install. |
-| `systemctl --user enable` non-zero | The `subprocess.run(..., check=False)` calls don't raise, so after install `_install_user_timer` **re-probes** with `systemctl --user is-enabled oneup-update.timer` and returns that boolean; a non-`enabled` result reverts the toggle to off. (This explicit post-op re-probe is new; weekly-check does not currently verify its enable — see Open questions.) |
+| `install_user_timer` raises `OSError` (can't write `~/.config/systemd/user`) | Caught and shown via `QMessageBox.warning`, then the toggle is reverted to off. **New logic:** the existing `on_autocheck_toggled` catches `OSError` and warns but does *not* revert its toggle; auto-update adds the explicit revert so it never shows on after a failed install. |
+| `systemctl --user enable` non-zero | The `subprocess.run(..., check=False)` calls don't raise, so after install `install_user_timer` **re-probes** with `systemctl --user is-enabled oneup-update.timer` and returns that boolean; a non-`enabled` result reverts the toggle to off. (This explicit post-op re-probe is new; weekly-check does not currently verify its enable — see Open questions.) |
 | Revoke of passwordless while auto-update on | Auto-update timer removed regardless of the revoke process's outcome (removal is a local systemd-user op); auto-update switch reflected off with a note. |
 | Unattended run itself fails at 2am | Engine records the failure, continues remaining steps, and the end-of-run `--notify` fires "Update failed — see log" (no new behaviour — same engine path as a manual run). |
 

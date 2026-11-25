@@ -17,7 +17,7 @@ from . import i18n, step_progress, steps
 from . import package_views as pv
 from .elided_label import ElidedLabel
 from .layout_host import LayoutHost
-from .markers import _format_size
+from .markers import format_size
 from .step_progress import FULL
 
 
@@ -195,7 +195,7 @@ class SpotlightLayout(LayoutHost):
                 "layout_spotlight", "{n} so far").format(n=i18n.number(done)))
         else:
             self.figures[0].setText(unknown)
-        self.figures[1].setText(_of(_format_size(win._dl_got), _format_size(win._dl_total))
+        self.figures[1].setText(_of(format_size(win._dl_got), format_size(win._dl_total))
                                 if win._dl_total else unknown)
         self.figures[2].setText(step_progress.time_left(win) or unknown)
 

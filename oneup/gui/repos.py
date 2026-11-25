@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from .placement import center_on_parent
+from .settings_dialog import button_strip
 from .theme import card_inside
 from .toggle_switch import ToggleSwitch
 
@@ -34,14 +35,14 @@ from .toggle_switch import ToggleSwitch
 # Repo aliases are the identifiers passed to a root `zypper modifyrepo/removerepo`;
 # validate them against this before they reach a shell (defence in depth, mirroring
 # the rollback snapshot-id and service-name guards).
-_ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
+ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
 
 
 def _alias_ok(alias: str) -> bool:
-    """May `alias` reach the root zypper command? It must match `_ALIAS_RE` and not be
+    """May `alias` reach the root zypper command? It must match `ALIAS_RE` and not be
     all digits: zypper also reads a repository argument as its list number, so "2"
     could change a different repository (ONEUP-0427)."""
-    return bool(_ALIAS_RE.fullmatch(alias)) and not alias.isdecimal()
+    return bool(ALIAS_RE.fullmatch(alias)) and not alias.isdecimal()
 
 
 def _parse_repos(text: str) -> list[dict]:
@@ -163,20 +164,13 @@ class RepoManagerDialog(QDialog):
         self._populate(repos)
         root.addWidget(scroll, 1)
 
-        strip = QFrame()
-        strip.setObjectName("DialogButtons")
-        btns = QHBoxLayout(strip)
-        btns.setContentsMargins(0, 0, 0, 0)
-        btns.addStretch(1)
         self.apply_btn = QPushButton(QCoreApplication.translate("repos", "Apply changes"))
         self.apply_btn.setObjectName("RunBtn")
         self.apply_btn.clicked.connect(self._apply)
         self.close_btn = QPushButton(QCoreApplication.translate("repos", "Close"))
         self.close_btn.setObjectName("GhostBtn")
         self.close_btn.clicked.connect(self.reject)
-        btns.addWidget(self.apply_btn)
-        btns.addWidget(self.close_btn)
-        root.addWidget(strip)
+        root.addWidget(button_strip(self.apply_btn, self.close_btn))
 
     def _populate(self, repos: list[dict]):
         """(Re)build one row per repository — at open, and after a failed apply so

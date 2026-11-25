@@ -1,8 +1,11 @@
-"""The popup that hosts the background-behaviour toggles.
+"""The Settings popup: three tabs of the controls the window owns.
 
-A host, not an owner: every button it lays out is built and owned by the
+A host, not an owner: every control it lays out is built and owned by the
 window, and re-parented here on the first open. It gets a module of its own
 because it is a dialog with a `showEvent`, not because it owns the settings.
+
+Also two small helpers the window's dialogs share: the button strip along a
+dialog's foot, and setting a hosted switch without firing its handler.
 """
 from __future__ import annotations
 
@@ -28,6 +31,31 @@ from .placement import center_on_parent
 from .theme import card_inside
 
 
+def set_quietly(button, on: bool) -> None:
+    """Show `on` on a switch WITHOUT running its toggled handler — the reflect every
+    setting uses when it reports the machine's real state. The caller then refreshes
+    the switch's label, which the handler would otherwise have done."""
+    button.blockSignals(True)
+    button.setChecked(on)
+    button.blockSignals(False)
+
+
+def button_strip(*buttons: QWidget) -> QFrame:
+    """A dialog's row of buttons, pushed to the right, for the bottom of its layout.
+
+    Named so the focus derivation can tell a button strip resting on `win` from one
+    nested in a row card; a strip is otherwise the one surface with no container of
+    its own to qualify on. Every dialog builds its strip here, so the name holds."""
+    strip = QFrame()
+    strip.setObjectName("DialogButtons")
+    row = QHBoxLayout(strip)
+    row.setContentsMargins(0, 0, 0, 0)
+    row.addStretch(1)
+    for button in buttons:
+        row.addWidget(button)
+    return strip
+
+
 class _RowsScroll(QScrollArea):
     """Asks for its rows' whole height at its own width. QScrollArea caps its
     hint at 24 lines of text, so the dialog opened scrolling on a screen with
@@ -50,9 +78,6 @@ class SettingsDialog(QDialog):
         self.setWindowTitle(QCoreApplication.translate("settings_dialog", "Settings"))
         self.setMinimumWidth(460)
         root = QVBoxLayout(self)
-        # The old intro said "Each is off until you turn it on", which is true of
-        # the first heading's five toggles and false of the other two headings'
-        # rows — the same defect the original had once the groups existed.
         intro = QLabel(QCoreApplication.translate(
             "settings_dialog",
             "How OneUp behaves on its own, how it looks, and what it does on "
@@ -74,12 +99,34 @@ class SettingsDialog(QDialog):
         self.tabs.setExpanding(False)
         self.pages = QStackedWidget()
         self._scrolls: list[_RowsScroll] = []
+        self._controls: list[QWidget] = []     # every row's control, in layout order
         self.tabs.currentChanged.connect(self.pages.setCurrentIndex)
         root.addWidget(self.tabs)
         root.addWidget(self.pages, 1)
         # Qt does not scroll a control into view when Tab arrives from outside
         # its page — from the tabs or Close — so the dialog does.
         QApplication.instance().focusChanged.connect(self._on_focus)
+        self._automatic_page(parent)
+        self._appearance_page(parent)
+        self._machine_page(parent)
+        # A page taller than its rows keeps them at the top, at their own height.
+        for scroll in self._scrolls:
+            scroll.widget().layout().addStretch(1)
+        self.status = QLabel("")
+        self.status.setObjectName("Tagline")
+        root.addWidget(self.status)
+        self.close_btn = QPushButton(QCoreApplication.translate("settings_dialog", "Close"))
+        self.close_btn.setObjectName("GhostBtn")
+        self.close_btn.clicked.connect(self.reject)
+        root.addWidget(button_strip(self.close_btn))
+
+        # A QDialog has its own focus chain — Qt's is per top-level widget, so
+        # the window's chain can never reach in here and this half has to be
+        # stated on its own.
+        for a, b in itertools.pairwise(self.focus_chain()):
+            self.setTabOrder(a, b)
+
+    def _automatic_page(self, parent) -> None:
         _tray_note = ("" if parent._tray_available else QCoreApplication.translate(
             "settings_dialog", "  (your desktop has no system tray)"))
         body = self._page(QCoreApplication.translate(
@@ -130,6 +177,7 @@ class SettingsDialog(QDialog):
             "Ask GitHub whether a newer OneUp exists each time OneUp starts. "
             "Check for updates in About works either way."), parent.appcheck_btn))
 
+    def _appearance_page(self, parent) -> None:
         body = self._page(QCoreApplication.translate("settings_dialog", "Appearance"))
         self._appearance_tab = self.tabs.count() - 1
         body.addWidget(self._row(
@@ -157,9 +205,8 @@ class SettingsDialog(QDialog):
                 "Switch to high-contrast colours: plain black and white with "
                 "strong outlines, for easier reading."), parent.contrast_btn))
 
-        # Repositories arrives here from the header. `_row` takes a description
-        # per row and does not read a tooltip, so it needs one. Recenter is back
-        # in the header for now (ONEUP-0245).
+    def _machine_page(self, parent) -> None:
+        # Each row carries its own description: `_row` does not read a tooltip.
         body = self._page(QCoreApplication.translate(
             "settings_dialog",
             "This machine"))
@@ -180,41 +227,12 @@ class SettingsDialog(QDialog):
                 "Delete OneUp's update logs once they are this old. The log of "
                 "your latest update is always kept."),
             parent.logkeep_btn))
-        # A page taller than its rows keeps them at the top, at their own height.
-        for scroll in self._scrolls:
-            scroll.widget().layout().addStretch(1)
-        self.status = QLabel("")
-        self.status.setObjectName("Tagline")
-        root.addWidget(self.status)
-        # Named so the focus derivation can tell a button strip resting on `win`
-        # from one nested in a row card; a strip is otherwise the one surface
-        # with no container of its own to qualify on.
-        strip = QFrame()
-        strip.setObjectName("DialogButtons")
-        btns = QHBoxLayout(strip)
-        btns.setContentsMargins(0, 0, 0, 0)
-        btns.addStretch(1)
-        self.close_btn = QPushButton(QCoreApplication.translate("settings_dialog", "Close"))
-        self.close_btn.setObjectName("GhostBtn")
-        self.close_btn.clicked.connect(self.reject)
-        btns.addWidget(self.close_btn)
-        root.addWidget(strip)
-
-        # A QDialog has its own focus chain — Qt's is per top-level widget, so
-        # the window's chain can never reach in here and this half has to be
-        # stated on its own.
-        for a, b in itertools.pairwise(self.focus_chain()):
-            self.setTabOrder(a, b)
 
     def focus_chain(self) -> list[QWidget]:
-        """This dialog's controls, in the order the pages lay them out. Tab
-        passes over the controls of the pages not showing, as Qt skips any
-        hidden widget."""
-        p = self.parent()
-        auth = [] if p._service_route else [p.auth_btn]    # not laid out on a service install
-        return [self.tabs, p.auto_btn, *auth, p.autoupdate_btn, p.tray_btn, p.startboot_btn,
-                p.appcheck_btn, p.theme_combo, p.layout_btn, p.textsize_btn, p.contrast_btn,
-                p.repos_btn, p.diag_btn, p.logkeep_btn, self.close_btn]
+        """This dialog's controls, in the order the pages lay them out — `_row`
+        records each — between the tabs and Close. Tab passes over the controls of
+        the pages not showing, as Qt skips any hidden widget."""
+        return [self.tabs, *self._controls, self.close_btn]
 
     def _page(self, title: str) -> QVBoxLayout:
         """Add a tab and its page, and return the layout its rows go into.
@@ -249,6 +267,7 @@ class SettingsDialog(QDialog):
         lbl.setWordWrap(True)
         lay.addWidget(lbl, 1)
         lay.addWidget(control, 0, Qt.AlignVCenter)
+        self._controls.append(control)
         return fr
 
     def _on_focus(self, _old, new) -> None:

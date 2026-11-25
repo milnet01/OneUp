@@ -12,20 +12,14 @@ half-applied or orphan a zypper that carries on regardless (ONEUP-0047).
 """
 from __future__ import annotations
 
-import contextlib
-import os
-import shutil
-import subprocess
-import tempfile
 import time
-from datetime import datetime
 from functools import partial
 
 import shiboken6
 from PySide6.QtCore import QCoreApplication, QProcess, QTimer
 from PySide6.QtWidgets import QMessageBox
 
-from .. import APP_ID, APP_NAME
+from .. import APP_NAME
 from . import (
     app_update,
     banners,
@@ -164,13 +158,13 @@ def start_check(win):
 
 def start_run(win):
     """Update. The window is in exactly one of three states, and this is the table from
-    ONEUP-0044 §4.5 — the fix's whole window side.
+    ONEUP-0044 §4.5.
 
-    No preview running, or nothing selected -> `_launch`, exactly as today.
+    No preview running, or nothing selected -> `_launch`, a fresh engine.
 
     Preview running, `hold.state` present and its line 1 is our own `_size_proc` pid ->
     adopt that process as the run's, so the credential it already cached is the one the
-    run uses. That is the fix.
+    run uses, and the user is asked for a password once, not twice.
 
     Preview running, no `hold.state` yet -> WAIT. It must not write `go.request` here:
     the engine's freshness rule compares a go-ahead against a stamp that does not exist
@@ -259,17 +253,7 @@ def _write_go_request(text: str) -> None:
     """Write `go.request` whole. The engine reads its first line the moment the file is
     newer than its hold stamp, so a truncate-then-write could be read empty — and an
     empty go-ahead is refused. A rename is atomic: the engine sees all of it or none."""
-    target = paths.GO_REQUEST
-    target.parent.mkdir(parents=True, exist_ok=True)
-    fd, name = tempfile.mkstemp(prefix=target.name + ".", dir=target.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(text)
-        os.replace(name, target)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(name)
-        raise
+    paths.write_whole(paths.GO_REQUEST, text)
 
 
 def _wait_for_hold(win):
@@ -296,7 +280,7 @@ def _show_hold_wait(win):
     wait with no sign of life reads as a hang, and the user closes the window. The
     clock counts up because the dry run's length cannot be known in advance. Spoken
     once by `_wait_for_hold`; the ticking figure updates silently."""
-    waited = markers._format_duration(int(time.monotonic() - win._hold_wait_since))
+    waited = markers.format_duration(int(time.monotonic() - win._hold_wait_since))
     win.status.setText(QCoreApplication.translate(
         "run",
         "Working out the download size first — the update starts as soon "
@@ -307,8 +291,8 @@ def _hold_wait_tick(win):
     proc = getattr(win, "_size_proc", None)
     if proc is None or proc.state() == QProcess.NotRunning:
         # The preview failed or was cancelled before it ever held. Fall back to starting
-        # a fresh engine, which is today's behaviour and today's two prompts — the fix
-        # degrades to the status quo, never to an error (INV-7).
+        # a fresh engine, which asks for the password again — a second prompt, never an
+        # error (INV-7).
         win._hold_wait.stop()
         win.set_controls_enabled(True)
         _launch(win, win.selected_steps(), check=False)
@@ -322,7 +306,7 @@ def _hold_wait_tick(win):
         return
     if win._go_write_failed:
         # The go-ahead could not be written and would fail again. Fall back to a fresh
-        # engine — the status quo, as for a preview that never held (INV-7).
+        # engine, as for a preview that never held (INV-7).
         win.set_controls_enabled(True)
         _launch(win, win.selected_steps(), check=False, beside_hold=True)
     else:
@@ -363,7 +347,6 @@ def request_size(win, key: str, unasked: bool = False):
                        link.size_btn)
     win._size_buf = ""
     win._size_dec = markers.utf8_decoder()
-    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     # Named as a RUN log, not `<stamp>.size.log`, because --hold means this preview may
     # become the run. The engine writes its --log= value verbatim into `run.state` for
     # run-following, so a run that logged to a `.size.log` would be followed at a path
@@ -371,7 +354,7 @@ def request_size(win, key: str, unasked: bool = False):
     # correctly up front costs nothing and needs no extra payload in `go.request`
     # (ONEUP-0044 §4.5). Held here rather than in `_log_path`, which must keep pointing
     # at the last real run until this preview actually becomes one.
-    size_log = paths.STATE_LOG_DIR / f"{stamp}.log"
+    size_log = paths.new_log()
     win._hold_log = size_log
     p = EngineProcess(win)     # it may become the run (`_adopt_held_engine`)
     p.setProcessChannelMode(QProcess.MergedChannels)
@@ -419,9 +402,9 @@ def _on_size_finished(win, exit_code: int, _status):
     # Clear the held-engine state FIRST. The early return below fires whenever a size
     # arrived — which is exactly when a hold existed — so anything placed after it would
     # never run for a held engine, and the window would go on offering a process that has
-    # gone. Expiry, Cancel and a killed engine all land here, and all three must degrade
-    # to today's behaviour rather than to an error: the next Update simply launches a
-    # fresh engine (ONEUP-0044 §4.2, INV-7).
+    # gone. Expiry, Cancel and a killed engine all land here, and none of the three may
+    # end in an error: the next Update simply launches a fresh engine (ONEUP-0044 §4.2,
+    # INV-7).
     # Read what the probe printed last before judging it, then release it (ONEUP-0183).
     # A SIZE line with no line ending sat in the buffer unread, so a real size was
     # reported as "Nothing to download"; and the process was never deleted.
@@ -475,8 +458,8 @@ def _reset_for_run(win, steps: list[str], check: bool):
     and `_run_active` false — which leaves the standalone thin-snapshots action
     unguarded (§4.5).
 
-    `_log_path` is deliberately NOT here, and that exclusion is the point of the
-    paragraph above it in the spec. `_launch` computes it from a fresh
+    `_log_path` is deliberately NOT here, and that exclusion is the point of
+    ONEUP-0044 §4.5's paragraph on the factored block. `_launch` computes it from a fresh
     `datetime.now()` stamp, so a shared block run on the adopt path would overwrite it
     with a path no engine ever wrote to — and disagree with `run.state` line 2, so a
     window following the run would look for the log in the wrong place and "Open log
@@ -600,8 +583,7 @@ def _launch(win, steps: list[str], check: bool, import_keys: bool = False,
         return
     _reset_for_run(win, steps, check)
 
-    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    win._log_path = paths.STATE_LOG_DIR / (f"{stamp}.check.log" if check else f"{stamp}.log")
+    win._log_path = paths.new_log("check" if check else "")
 
     if check:
         win.bar.setRange(0, 0)  # indeterminate
@@ -701,15 +683,31 @@ def _show_status(win):
 
 
 def _phase_count(win) -> str:
-    """The phase and its count — "Downloading 4 of 24" — or a running tally where the
-    total is not known, as zypper's preload phase reports none (marker-protocol.md
-    §4.3)."""
+    """The status line's phase and count — "Downloading 4 of 24" (ONEUP-0239 §4.1.3)."""
     n, total = win._progress_count
-    named = _named_part(win, win._progress_phase, n, total)
+    return _phase_words(win, win._progress_phase, step_progress.shown_phase(win), n, total,
+                        with_noun=False)
+
+
+def _phase_words(win, phase: str, said: str, n: int, total: int, with_noun: bool) -> str:
+    """A phase in words, with its count. `said` is the half the words name, which
+    `step_progress.half_of` decides: past the halfway mark a late download line reads
+    as installing (ONEUP-0239 §4.1.1).
+
+    Total 0 is zypper's preload phase, which reports no denominator, so the words give
+    the honest running tally rather than invent one (marker-protocol.md §4.3). Whole
+    sentences per phase, never a verb dropped into a frame (wording-and-translation.md
+    §6.2). `with_noun`: the bar's caption has room for "packages"; the status line,
+    which carries the byte figure and the time left beside it, does not."""
+    named = _named_part(win, phase, n, total)
     if named:
         return named
-    downloading = step_progress.shown_phase(win) == "download"
-    if total:
+    downloading = said == "download"
+    if total and with_noun:
+        text = (QCoreApplication.translate("run", "Downloading {n} of {total} packages")
+                if downloading else
+                QCoreApplication.translate("run", "Installing {n} of {total} packages"))
+    elif total:
         text = (QCoreApplication.translate("run", "Downloading {n} of {total}") if downloading
                 else QCoreApplication.translate("run", "Installing {n} of {total}"))
     else:
@@ -777,11 +775,11 @@ def _byte_figure(win) -> str:
     """How much has come down, of how much — download half only (ONEUP-0239 §4.1.1)."""
     if step_progress.shown_phase(win) != "download" or not win._dl_got:
         return ""
-    got = markers._format_size(win._dl_got)
+    got = markers.format_size(win._dl_got)
     if not win._dl_total:
         return got
     return QCoreApplication.translate("run", "{got} of {total}").format(
-        got=got, total=markers._format_size(win._dl_total))
+        got=got, total=markers.format_size(win._dl_total))
 
 
 def _reset_activity(win):
@@ -801,9 +799,11 @@ def _reset_activity(win):
 
 
 def _tick_activity(win, reweigh: bool = True):
-    """Redraw the liveness line: what we're waiting on, for how long, and how fast
-    it's moving. Runs every 5s for the length of a run, and again whenever fresh
-    figures arrive, so the answer to "has it stalled?" is always on screen.
+    """Work out the liveness figures: what we're waiting on, for how long, and how
+    fast it's moving. Runs every 5s for the length of a run, and again whenever fresh
+    figures arrive. What the user sees is the status line, which `_show_status` builds
+    from `_status_clock` and `_status_stall`; the `activity` label this also fills is
+    never shown, and the suite reads it.
 
     Only the 5s tick re-weighs the package cache. By mid-download it holds thousands
     of files and markers can arrive several times a second, so a marker-driven redraw
@@ -814,7 +814,7 @@ def _tick_activity(win, reweigh: bool = True):
     bits = []
     win._status_clock = win._status_stall = ""
     if win._activity_what and win._activity_since:
-        waited = markers._format_duration(int(now - win._activity_since))
+        waited = markers.format_duration(int(now - win._activity_since))
         win._status_clock = QCoreApplication.translate("run", "{what} — {waited}").format(
             what=win._activity_what, waited=waited)
         bits.append(win._status_clock)
@@ -839,9 +839,9 @@ def _tick_activity(win, reweigh: bool = True):
         win._dl_got = got
     win._dl_rate = 0.0
     if got > 0:
-        human = markers._format_size(got)
-        bits.append(f"{human} of {markers._format_size(win._dl_total)}"
-                    if win._dl_total else human)
+        human = markers.format_size(got)
+        bits.append(QCoreApplication.translate("run", "{got} of {total}").format(
+            got=human, total=markers.format_size(win._dl_total)) if win._dl_total else human)
         if not win._dl_at:                       # anchor the rate on first sight
             win._dl_at, win._dl_from = now, got
         # Averaged over the whole download, not sampled: an average is steady enough
@@ -849,7 +849,7 @@ def _tick_activity(win, reweigh: bool = True):
         secs, moved = now - win._dl_at, got - win._dl_from
         if secs >= 1 and moved > 0:
             win._dl_rate = moved / secs
-            bits.append(f"{markers._format_size(int(win._dl_rate))}/s")
+            bits.append(f"{markers.format_size(int(win._dl_rate))}/s")
     if win._progress_phase == "download" and win.current_step:
         # The same figure moves the step's download half, so the bar agrees with
         # this line through the prefetch, which sends no bytes (ONEUP-0239 §4.1.1).
@@ -868,11 +868,11 @@ def _tick_activity(win, reweigh: bool = True):
     if stalled and fetching:
         win._status_stall = QCoreApplication.translate(
             "run", "nothing received for {duration} — the server may have stalled. "
-            "Stopping now is safe.").format(duration=markers._format_duration(quiet))
+            "Stopping now is safe.").format(duration=markers.format_duration(quiet))
     elif stalled:
         win._status_stall = QCoreApplication.translate(
             "run", "nothing new for {duration} — still working").format(
-                duration=markers._format_duration(quiet))
+                duration=markers.format_duration(quiet))
     if win._status_stall:
         bits.append(win._status_stall)
     elif bits:
@@ -957,7 +957,7 @@ def handle_marker(win, line: str):
         # badge --check shows, but for a real run: "3 installed", "Up to date", …).
         row = win.rows.get(key)
         if row:
-            badge = markers._step_badge(status, code, args)
+            badge = markers.step_badge(status, code, args)
             row.set_badge(badge)
             if key in ("flatpak", "firmware", "orphans") and code in (
                     "installed", "updated", "removed"):
@@ -985,7 +985,7 @@ def handle_marker(win, line: str):
         secs = int(parts[1]) if len(parts) > 1 and parts[1].isdecimal() else 0
         row = win.rows.get(key)
         if row:
-            row.set_timing(markers._format_duration(secs))
+            row.set_timing(markers.format_duration(secs))
     elif tag == "FREED":
         # Disk the cache clean reclaimed, shown as the cache row's badge
         # ("Reclaimed 1.4G  ·  <1s"). Emitted after STEP_END, so it replaces
@@ -998,14 +998,12 @@ def handle_marker(win, line: str):
                 "run",
                 "Reclaimed {human}").format(human=human))
     elif tag == "CHECK":
-        key, count = parts[0], (parts[1] if len(parts) > 1 else "0")
-        # `at-least`: the count is the rootless floor, not the update's own (ONEUP-0329).
-        at_least = len(parts) > 3 and parts[3] == "at-least"
+        key = parts[0]
+        n, at_least = markers.check_count(parts)
         if key == "TOTAL":
-            win._installed_count = count
+            win._installed_count = str(n)
             win._installed_basis = "at-least" if at_least else ""
         else:
-            n = int(count) if count.isdecimal() else 0
             if key == "system":
                 win._system_pending = n
             row = win.rows.get(key)
@@ -1066,30 +1064,16 @@ def handle_marker(win, line: str):
         key, phase = parts[0], parts[3]
         n, total = int(parts[1]), int(parts[2])
         downloading = phase == "download"
-        # What the words say: past the halfway mark a late download line reads as
-        # installing (§4.1.1). `downloading` stays the line's own, for the bar.
+        # What the words say (§4.1.1). `downloading` stays the line's own, for the bar.
         said = step_progress.half_of(win, key, phase)
-        # total 0 = zypper's preload phase, which reports no denominator. Show the
-        # honest running tally rather than inventing one. Whole sentences per phase,
-        # never a verb dropped into a frame (wording-and-translation.md §6.2).
-        named = _named_part(win, phase, n, total)
-        if named:
-            detail = named
-        elif total:
-            detail = (QCoreApplication.translate("run", "Downloading {n} of {total} packages")
-                      if said == "download" else
-                      QCoreApplication.translate("run", "Installing {n} of {total} packages"))
-        else:
-            detail = (QCoreApplication.translate("run", "Downloading packages — {n} so far")
-                      if said == "download" else
-                      QCoreApplication.translate("run", "Installing packages — {n} so far"))
-        if not named:
-            detail = detail.format(n=n, total=total)
-        _show_detail(win, detail)
+        _show_detail(win, _phase_words(win, phase, said, n, total, with_noun=True))
         # Spoken once per phase, not per package: a screen reader announcing all
         # 141 packages would bury everything else, but silence through the run's
         # longest stretch is exactly what made it look hung.
         announce = said != step_progress.shown_phase(win)
+        # Set the phase FIRST, before the byte fields and the redraw below: the
+        # liveness line's cache-weighing fallback is gated on it, so a stale phase
+        # would skip the very first measurement.
         win._progress_phase = phase
         # Packages moving means the refresh is over: keeping its source and clock drew
         # "Fetching <alias> — 2m 15s" over a whole real download (ONEUP-0284).
@@ -1099,8 +1083,7 @@ def handle_marker(win, line: str):
         # Optional trailing byte fields: how much zypper says has come down, and its
         # total for the transaction. Either may be 0 for "not known" — during the
         # prefetch phase zypper reports no sizes at all, and the liveness line falls
-        # back to weighing the package cache. Set the phase FIRST: that fallback is
-        # gated on it, so a stale phase would skip the very first measurement.
+        # back to weighing the package cache (the phase, set above, gates that).
         if len(parts) > 4 and parts[4].isdecimal():
             win._dl_bytes = max(win._dl_bytes, int(parts[4]))
             if len(parts) > 5 and parts[5].isdecimal() and int(parts[5]):
@@ -1168,7 +1151,7 @@ def handle_marker(win, line: str):
         if parts and parts[0] == "import-keys":
             win._remedy_keys = True
         elif (parts and parts[0] == "skip-repo" and len(parts) >= 2
-              and repos._ALIAS_RE.fullmatch(parts[1])):
+              and repos.ALIAS_RE.fullmatch(parts[1])):
             # Checked because the alias goes back to the engine as --skip-repo=
             # (security.md §4, ONEUP-0144): the same guard the repository editor uses.
             win._remedy_skips.append(parts[1])
@@ -1189,7 +1172,7 @@ def handle_marker(win, line: str):
         # warn banner. The "thinned|N" variant comes from the dedicated
         # --thin-snapshots process and is read in _on_thin_finished, not here.
         win._snapshot_count = int(parts[1]) if len(parts) > 1 and parts[1].isdecimal() else 0
-        banners._show_warning(win,
+        banners.show_warning(win,
             QCoreApplication.translate(
                 "run",
                 "{snapshot_count} system restore points (snapshots) are stored. "
@@ -1219,13 +1202,12 @@ def handle_marker(win, line: str):
             role = "repo-dup"
         else:
             msg = QCoreApplication.translate("run", "Pre-flight warning — see the log for details.")
-        banners._show_warning(win, msg, role=role)
+        banners.show_warning(win, msg, role=role)
     elif tag == "DONE":
-        # The overall result normally comes from the process exit code in
-        # on_finished (the two always agree). It is recorded here as well for the
-        # one case with no exit code to read: a run started by an earlier OneUp
-        # window that this one attached to and is following through its log
-        # (_attach_to_running_engine).
+        # On every run, DONE alone says "stopped": a stopped run exits 0, so the exit
+        # code cannot (`markers.run_notification`). The exit code decides ok against
+        # errors — except for a run followed through its log, started by an earlier
+        # window (_attach_to_running_engine), which has no exit code and takes DONE's.
         win._done_status = parts[0] if parts else ""
 
 
@@ -1239,36 +1221,37 @@ def on_error(win, err):
     win.status.setText(QCoreApplication.translate("run", "Could not start the update script."))
     win.bar.setRange(0, 1)
     win.set_controls_enabled(True)
-    # QProcess does not emit `finished` after a start failure, so nothing else
-    # clears these — and a window left mid-run blocks the thin action for the rest
-    # of the session and warns "an update is still running" on every quit.
+    # QProcess does not emit `finished` after a start failure, so nothing else ends
+    # the run — and a window left mid-run blocks the thin action for the rest of the
+    # session, warns "an update is still running" on every quit, leaves the rows
+    # `_reset_for_run` set waiting and the package pages reading it as going
+    # (ONEUP-0398).
+    _end_run(win)
+
+
+def _end_run(win):
+    """What every way a run ends shares, `on_finished` and a failed start alike: the
+    run is no longer active, its waiting rows and clock stop, the layout redraws, and
+    the process object is released (each run parents a new one to the window). A run
+    we merely FOLLOWED has no process of ours (ONEUP-0045)."""
     win._run_active = False
     win._liveness_active = False
-    win._activity_timer.stop()
-    # The rest of on_finished's teardown: the rows `_reset_for_run` set waiting stayed
-    # waiting, and the package pages still read the run as going (ONEUP-0398).
-    win.engine_finished = True
+    win.engine_finished = True     # the package pages' empty sentence reads it
     win.current_step = ""
     step_progress.stop_waiting(win)
+    win._activity_timer.stop()
     _set_activity(win, "")
     _refresh_layout(win)
-    # Release the process object on a start failure too (finished never fires here).
-    win.proc.deleteLater()
+    proc = getattr(win, "proc", None)
+    if proc is not None:
+        proc.deleteLater()
 
 
 def _notify_when_away(win, body: str, urgency: str = "normal"):
     """Fire a desktop notification for a finished run, but only when the window
-    isn't focused — you started an update and tabbed away, so tell you it's done.
-    Best-effort: skipped if notify-send is absent (like the engine's own hint)."""
-    if win.isActiveWindow() or not shutil.which("notify-send"):
-        return
-    try:
-        subprocess.Popen(  # noqa: S603 — fixed argv, no shell.
-            ["notify-send", "-a", APP_NAME, "-i", APP_ID,  # noqa: S607
-             "-u", urgency, APP_NAME, body],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except OSError:
-        pass
+    isn't focused — you started an update and tabbed away, so tell you it's done."""
+    if not win.isActiveWindow():
+        tray.notify(APP_NAME, body, urgency)
 
 
 def _first_hint_command(win) -> str:
@@ -1290,7 +1273,7 @@ def _show_restart_banners(win):
     # what gets offered — rather than a banner whose button opens a dialog naming
     # what it refuses to touch. Both halves can be true at once, and then both
     # banners show: restart the safe ones now, reboot for the rest.
-    svc_safe, svc_risky = banners._split_session_critical(banners._service_units(win))
+    svc_safe, svc_risky = banners.split_session_critical(banners._service_units(win))
     if win._reboot:
         if win._reboot_reason:
             # Name what triggered it, e.g. "A new kernel and your NVIDIA graphics
@@ -1343,74 +1326,70 @@ def on_finished(win, exit_code: int, _status):
     if win._buf.strip():
         handle_line(win, win._buf.rstrip("\r"))
     win._buf = ""
-    win._run_active = False
-    win._liveness_active = False
+    _end_run(win)
     app_update.refresh_restart(win)   # a run that updated OneUp itself offers a restart
-    win.engine_finished = True     # the package pages' empty sentence reads it
-    win.current_step = ""
-    step_progress.stop_waiting(win)
-    win._activity_timer.stop()
-    _set_activity(win, "")
-    _refresh_layout(win)
-    # Release the finished process so QProcess instances don't accumulate on the
-    # window across a long session (each run parents a new one to win). There may be
-    # no process at all: a run we merely FOLLOWED belongs to another window, and this
-    # is called from _poll_attached_run with only the log to go on (ONEUP-0045).
-    proc = getattr(win, "proc", None)
-    if proc is not None:
-        proc.deleteLater()
     ok = exit_code == 0
     win.set_controls_enabled(True)
-
     if win._check_mode:
-        win.bar.setRange(0, 1)
-        win.bar.setValue(1)
-        win.bar.setFormat(QCoreApplication.translate("run", "Check complete"))
-        n = win._installed_count
-        total = int(n) if n.isdecimal() else 0
-        least = "-at-least" if win._installed_basis == "at-least" else ""
-        # A count built on sources we couldn't read is a floor, not an answer, so
-        # it must never be dressed up as an all-clear — that is the bug this whole
-        # marker exists to prevent: the app said "up to date 🎉" while 8 updates
-        # were waiting, because a repository it silently skipped held them all
-        # (ONEUP-0056). Say what we found AND what we couldn't see.
-        #
-        # A check that finished always exits 0, so a non-zero exit means it never
-        # did — crashed, killed, or refused because a run was going. Its count is
-        # no answer at all, and the hint says why (ONEUP-0391).
-        if not ok:
-            win.status.setText(QCoreApplication.translate(
-                "run", "Couldn't check for updates — see the log."))
-            if win._hints:
-                banners._show_warning(win, win._hints[0], _first_hint_command(win))
-        elif win._unchecked:
-            win.status.setText(
-                i18n.counted("updates-partial", total) if total
-                else QCoreApplication.translate(
-                    "run", "Couldn't check for updates — no sources could be read."))
-            between = QCoreApplication.translate(
-                "run", "  ", "separator between whole sentences in one banner")
-            banners._show_warning(win, between.join(win._unchecked))
-        else:
-            win.status.setText(
-                i18n.counted("updates-available-run" + least, total) if total
-                else QCoreApplication.translate("run", "Everything is up to date. 🎉"))
-        win._announce(win.status.text())
-        if not ok or (win._unchecked and not total):
-            away = QCoreApplication.translate("run", "Couldn't check for updates.")
-        elif total:
-            away = i18n.counted("updates-available" + least, total)
-        else:
-            away = QCoreApplication.translate("run", "Everything is up to date.")
-        _notify_when_away(win, away)
-        if ok and _covers_tray_check(win):
-            tray._apply_tray_total(win, total, uncertain=bool(win._unchecked),
-                                   at_least=bool(least))
-        win._check_mode = False
-        if win.size_link.automatic and ok and win._system_pending:
-            request_size(win, "system", unasked=True)
-        return
+        _finish_check(win, ok)
+    else:
+        _finish_run(win, ok)
 
+
+def _finish_check(win, ok: bool):
+    """The end of a check: the count it found, or why it has none."""
+    win.bar.setRange(0, 1)
+    win.bar.setValue(1)
+    win.bar.setFormat(QCoreApplication.translate("run", "Check complete"))
+    n = win._installed_count
+    total = int(n) if n.isdecimal() else 0
+    at_least = win._installed_basis == "at-least"
+    # A count built on sources we couldn't read is a floor, not an answer, so
+    # it must never be dressed up as an all-clear — that is the bug this whole
+    # marker exists to prevent: the app said "up to date 🎉" while 8 updates
+    # were waiting, because a repository it silently skipped held them all
+    # (ONEUP-0056). Say what we found AND what we couldn't see.
+    #
+    # A check that finished always exits 0, so a non-zero exit means it never
+    # did — crashed, killed, or refused because a run was going. Its count is
+    # no answer at all, and the hint says why (ONEUP-0391).
+    if not ok:
+        win.status.setText(QCoreApplication.translate(
+            "run", "Couldn't check for updates — see the log."))
+        if win._hints:
+            banners.show_warning(win, win._hints[0], _first_hint_command(win))
+    elif win._unchecked:
+        win.status.setText(
+            i18n.counted("updates-partial", total) if total
+            else QCoreApplication.translate(
+                "run", "Couldn't check for updates — no sources could be read."))
+        between = QCoreApplication.translate(
+            "run", "  ", "separator between whole sentences in one banner")
+        banners.show_warning(win, between.join(win._unchecked))
+    else:
+        run_key = "updates-available-run-at-least" if at_least else "updates-available-run"
+        win.status.setText(
+            i18n.counted(run_key, total) if total
+            else QCoreApplication.translate("run", "Everything is up to date. 🎉"))
+    win._announce(win.status.text())
+    if not ok or (win._unchecked and not total):
+        away = QCoreApplication.translate("run", "Couldn't check for updates.")
+    elif total:
+        away = i18n.counted(
+            "updates-available-at-least" if at_least else "updates-available", total)
+    else:
+        away = QCoreApplication.translate("run", "Everything is up to date.")
+    _notify_when_away(win, away)
+    if ok and _covers_tray_check(win):
+        tray.apply_tray_total(win, total, uncertain=bool(win._unchecked),
+                               at_least=at_least)
+    win._check_mode = False
+    if win.size_link.automatic and ok and win._system_pending:
+        request_size(win, "system", unasked=True)
+
+
+def _finish_run(win, ok: bool):
+    """The end of an update run: the summary, the banners and the notification."""
     # A stopped run is neither: nothing went wrong, but it didn't do what was asked.
     # Claiming "All done" would be a success it never earned.
     stopped = win._done_status == "stopped"
@@ -1431,7 +1410,7 @@ def on_finished(win, exit_code: int, _status):
         win.refresh_last_run()
         _show_restart_banners(win)
         if win._hints:
-            banners._show_warning(win, win._hints[0], _first_hint_command(win))
+            banners.show_warning(win, win._hints[0], _first_hint_command(win))
         if win._sys_changed and win._snapshot:
             win.rollback_btn.setVisible(True)
         return
@@ -1487,6 +1466,8 @@ def on_finished(win, exit_code: int, _status):
             "then one whole sentence per source that changed something").format(
                 installed=between.join(installed))
     elif "system" in run_steps(win):
+        # Only the system step can say "up to date": the others report nothing to do
+        # as nothing at all, so a run without it claims no more than "finished".
         summary = QCoreApplication.translate("run", "All done — already up to date.")
     else:
         summary = QCoreApplication.translate("run", "All done — finished.")
@@ -1517,25 +1498,25 @@ def on_finished(win, exit_code: int, _status):
                 "run", "  ", "separator between whole sentences in one banner")
             sentences = [*win._hints[:1],
                          *(markers.fallback_remedy(c) for c in win._remedy_unknown)]
-            banners._show_warning(win, between.join(sentences), _first_hint_command(win))
+            banners.show_warning(win, between.join(sentences), _first_hint_command(win))
         elif win._hints:
-            banners._show_warning(win, win._hints[0], _first_hint_command(win))
+            banners.show_warning(win, win._hints[0], _first_hint_command(win))
         elif win._remedy_skips:
-            names = i18n.join_names(banners._repo_display_name(a) for a in win._remedy_skips)
+            names = i18n.join_names(banners.repo_display_name(a) for a in win._remedy_skips)
             if len(win._remedy_skips) == 1:
-                banners._show_warning(win,
+                banners.show_warning(win,
                     QCoreApplication.translate(
                         "run",
                         "{names} is failing — skip it and update everything else, or "
                         "check the log.").format(names=names))
             else:
-                banners._show_warning(win,
+                banners.show_warning(win,
                     QCoreApplication.translate(
                         "run",
                         "These sources are failing: {names} — skip them and update "
                         "everything else, or check the log.").format(names=names))
         else:
-            banners._show_warning(win, QCoreApplication.translate(
+            banners.show_warning(win, QCoreApplication.translate(
                 "run",
                 "A source's signing key is out of date."))
         # When a one-click remedy is available, the banner button offers it
@@ -1550,7 +1531,7 @@ def on_finished(win, exit_code: int, _status):
                 win.warn_btn.setText(
                     # "&&" draws one "&"; a lone "&" is a mnemonic (ONEUP-0251).
                     QCoreApplication.translate("run", "Skip {source} && update the rest").format(
-                        source=banners._repo_display_name(win._remedy_skips[0]).replace("&", "&&")))
+                        source=banners.repo_display_name(win._remedy_skips[0]).replace("&", "&&")))
             else:
                 win.warn_btn.setText(
                     QCoreApplication.translate("run", "Skip {count} sources && update the rest")
@@ -1571,7 +1552,7 @@ def on_finished(win, exit_code: int, _status):
         # isHidden, not isVisible: a window hidden to the tray reports every child
         # as invisible, which would overwrite the warning (and its button) just set.
         if win.warn_banner.isHidden():
-            banners._show_warning(win, QCoreApplication.translate(
+            banners.show_warning(win, QCoreApplication.translate(
                 "run",
                 "Some steps did not finish. Open the log to see what went wrong, "
                 "or retry them."))
@@ -1587,7 +1568,7 @@ def on_finished(win, exit_code: int, _status):
 
     # Keep the ambient tray icon honest: a clean run just installed updates.
     if ok and _covers_tray_check(win):
-        tray._apply_tray_total(win, 0)
+        tray.apply_tray_total(win, 0)
 
 
 def _covers_tray_check(win) -> bool:

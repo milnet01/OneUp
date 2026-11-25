@@ -19,7 +19,7 @@ from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QMessageBox
 
 from .. import APP_ID
-from . import auth, paths
+from . import auth, paths, settings_dialog
 
 # The two weekly timers: basename -> (unit Description, headless flag). One table, so
 # installing a timer and refreshing an installed one write the same unit (ONEUP-0158).
@@ -150,7 +150,7 @@ def _install_autostart(win) -> bool:
 def _remove_autostart():
     try:
         _autostart_path().unlink()
-    except OSError:      # already gone — fine (mirrors _remove_user_timer)
+    except OSError:      # already gone — fine (mirrors remove_user_timer)
         pass
 
 
@@ -162,7 +162,7 @@ SYSTEMCTL_SECONDS = 5.0
 def _systemctl_user(*args: str) -> str | None:
     """`systemctl --user <args>`'s stdout, or None if it did not answer in time.
 
-    An OSError still propagates: `_install_user_timer` reports it to the user."""
+    An OSError still propagates: `install_user_timer` reports it to the user."""
     try:
         # Safe: a fixed program, verbs from this module and a unit name built here; no shell.
         return subprocess.run(["systemctl", "--user", *args],  # noqa: S603,S607
@@ -199,7 +199,7 @@ def _autoupdate_enabled() -> bool:
     return _timer_enabled("oneup-update.timer")
 
 
-def _autoupdate_may_be_enabled() -> bool:
+def autoupdate_may_be_enabled() -> bool:
     """False when systemctl says the weekly update timer is off. A timed-out answer is
     not "off": the revoke path must still remove a timer it cannot see (ONEUP-0403).
     With no answer, the timer's unit file decides: OneUp writes it before enabling, so
@@ -210,7 +210,7 @@ def _autoupdate_may_be_enabled() -> bool:
     return state
 
 
-def _install_user_timer(win, basename: str, description: str,
+def install_user_timer(win, basename: str, description: str,
                         exec_flag: str) -> bool | None:
     """Write + enable a weekly systemd-user timer. True iff it ends up enabled; False
     if the enable did not take; None if writing the unit failed, which this has
@@ -235,7 +235,7 @@ def _install_user_timer(win, basename: str, description: str,
     return _timer_enabled(f"{basename}.timer")
 
 
-def _remove_user_timer(basename: str) -> bool:
+def remove_user_timer(basename: str) -> bool:
     """Disable and delete a weekly timer. True iff systemctl then says it is off: a
     disable that timed out or failed must not read as done (ONEUP-0403)."""
     units = _user_units_dir()
@@ -256,13 +256,12 @@ def _refresh_autocheck_label(win):
 
 
 def on_autocheck_toggled(win, on: bool):
-    # Weekly-check behaviour is unchanged: install/remove and refresh the label.
     # It deliberately does NOT revert its toggle on a failed install (see the
     # ONEUP-0022 spec's "Open questions" — hardening weekly-check is a separate item).
     if on:
-        _install_user_timer(win, "oneup-check", *TIMERS["oneup-check"])
+        install_user_timer(win, "oneup-check", *TIMERS["oneup-check"])
     else:
-        _remove_user_timer("oneup-check")
+        remove_user_timer("oneup-check")
     _refresh_autocheck_label(win)
 
 
@@ -273,21 +272,18 @@ def _refresh_autoupdate_label(win):
         else QCoreApplication.translate("autostart", "Automatic updates: off"))
 
 
-def _set_autoupdate_checked(win, on: bool):
+def set_autoupdate_checked(win, on: bool):
     """Reflect the real state on the toggle WITHOUT re-firing on_autoupdate_toggled."""
-    win.autoupdate_btn.blockSignals(True)
-    win.autoupdate_btn.setChecked(on)
-    win.autoupdate_btn.blockSignals(False)
+    settings_dialog.set_quietly(win.autoupdate_btn, on)
     _refresh_autoupdate_label(win)
 
 
 def on_autoupdate_toggled(win, on: bool):
-    # Up-front engine guard MIRRORS on_auth_toggled: with the engine absent the
-    # async chain hits _query_auth_status's early return and NO settle ever fires,
-    # so we must revert-and-return BEFORE any latch/disable, or the toggle would be
-    # stuck disabled forever.
+    # Up-front engine guard, as on_auth_toggled has: with no engine nothing can grant
+    # passwordless or answer a probe, so the switch goes back before any consent box
+    # is shown or the latch is set.
     if not paths.engine_available():
-        _set_autoupdate_checked(win, False)
+        set_autoupdate_checked(win, False)
         return
     if on:
         # The reflected passwordless switch is only used to pick the entry branch;
@@ -313,13 +309,13 @@ def on_autoupdate_toggled(win, on: bool):
                     "auth", "Setting up… (approve the password popup)"))
                 # _run_auth -> _on_auth_finished -> _query_auth_status -> settle installs.
             else:
-                _set_autoupdate_checked(win, False)
+                set_autoupdate_checked(win, False)
     else:
         # User turns auto-update off: remove the timer, clear any stray latch. A timer
         # that is still on keeps the switch on, so it never reads off while active.
         win._pending_autoupdate = False
-        if not _remove_user_timer("oneup-update"):
-            _set_autoupdate_checked(win, True)
+        if not remove_user_timer("oneup-update"):
+            set_autoupdate_checked(win, True)
             QMessageBox.warning(
                 win,
                 QCoreApplication.translate("autostart", "Could not turn off automatic updates"),
@@ -338,9 +334,7 @@ def _refresh_startboot_label(win):
 
 
 def _set_startboot_checked(win, on: bool):
-    win.startboot_btn.blockSignals(True)
-    win.startboot_btn.setChecked(on)
-    win.startboot_btn.blockSignals(False)
+    settings_dialog.set_quietly(win.startboot_btn, on)
     _refresh_startboot_label(win)
 
 

@@ -57,7 +57,7 @@ the badge no longer reads the message.
 
 This is the evidence the whole item rests on, and it is not a translation argument.
 
-`Updater._step_badge` takes `@@STEP_END@@`'s `status` and `detail` and returns its **own**
+`Updater.step_badge` takes `@@STEP_END@@`'s `status` and `detail` and returns its **own**
 badge. It does so by matching English substrings against the engine's sentence — testing
 `detail` for `"up to date"`, `"already"`, `"nothing"`, `"remov"`, `"applied"`, `"updated"`,
 `"update"`, and `"not installed"` on the `skip` branch — and by pulling the number back out
@@ -206,14 +206,14 @@ discharged in the banner instead: the run's
 of OneUp has no fix for what the run reported. It is the one converted family whose
 fallback is not a substitute for wording it would otherwise have shown.
 
-`@@STEP_END@@`'s `detail` carries a number today, and `_step_badge` recovers it with a
+`@@STEP_END@@`'s `detail` carries a number today, and `step_badge` recovers it with a
 regular expression (§2.1). Under codes the number is an **argument** in its own trailing
 field — `key|status|code|count` — so the window renders it through the plural form
 (`wording-and-translation.md` §6.3).
 
 **`STEP_END`'s codes are a closed set, and it is written down here because §3.2 forbids
 re-wording**: the conversion has to reproduce today's badges exactly, and today's badges
-are what `_step_badge` returns. Each code declares a fixed arity — a code that takes a
+are what `step_badge` returns. Each code declares a fixed arity — a code that takes a
 count always carries one, and a step with no number emits a *different* code rather than
 the same one with the field left off:
 
@@ -237,7 +237,7 @@ variable-arity**, which is what keeps `docs/specs/ONEUP-0108-window-wording.md` 
 arity rule from firing on an ordinary run.
 
 **`status` still outranks the code for `fail`, and the code decides the badge for `ok` and
-`skip`.** `_step_badge` returns on `status == "fail"` before reading `detail` at all; on
+`skip`.** `step_badge` returns on `status == "fail"` before reading `detail` at all; on
 `skip` it *does* read it, to choose between *Not installed* and *Skipped* — which is why
 `skip` gets two codes above rather than none. The conversion keeps that precedence rather
 than inverting it. A failed step still carries `failed`, because INV-1 admits no empty code

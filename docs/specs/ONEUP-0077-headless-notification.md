@@ -139,7 +139,7 @@ window cannot name in a sentence a file it never chose. Each path names a file u
 a timer run is the one a user comes back to days later and needs a record of, and the tray
 check rolls precisely because it repeats far more often. **Nothing deletes from `LOG_DIR`
 today.** The window already writes a timestamped log per GUI run (`_launch`), and nothing
-prunes them — `_latest_run_log` only reads. So unbounded growth is inherited, not started
+prunes them — `latest_run_log` only reads. So unbounded growth is inherited, not started
 here; what this item adds is an *unattended* source of it, roughly 52 files a year that no
 one chose to create. Not this item's to fix, and filed as **ONEUP-0082** rather than left to
 be discovered.

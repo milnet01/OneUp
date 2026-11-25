@@ -121,8 +121,8 @@ _SETTERS.update({"showMessage": (0, 1),  # QSystemTrayIcon: title, message
                  "addButton": (0,)})
 _MESSAGE_BOX = {"warning", "critical", "information", "question"}   # (parent, title, text)
 _HELPERS = {                             # project helpers whose parameter reaches a user
-    "_show_warning": (1,), "_confirm_reboot": (1, 2), "_set_activity": (1,),
-    "_notify_when_away": (1,), "_notify": (0, 1),
+    "show_warning": (1,), "_confirm_reboot": (1, 2), "_set_activity": (1,),
+    "_notify_when_away": (1,), "_notify": (0, 1), "notify": (0, 1),
     "_make_banner": (3,)}                # (win, frame name, button name, button text, …)
 _WIDGETS = {"QLabel", "QPushButton", "QCheckBox", "QAction", "QGroupBox",
             "QToolButton", "QRadioButton", "QMenu"}                  # text as argument 0
