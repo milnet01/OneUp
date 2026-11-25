@@ -221,7 +221,7 @@ remedy sits beside the thing it remedies; §9 records why the alternative was re
 **The move needs a visibility contract, and today's code does not satisfy it.** `retry_btn`
 is revealed at the end of a run by `if self._failed_steps:`, independently of the banner —
 while the end-of-run banner in `on_finished` is raised only when `self._hints or
-self._remedy_skips or self._remedy_keys`. (`_show_warning` itself is called from four other
+self._remedy_skips or self._remedy_keys`. (`show_warning` itself is called from four other
 places — a snapshot pile-up, a pre-flight disk or repository warning, a `--check` that could
 not read every source, and a stopped run — none of which implies a failed step, so Retry
 stays hidden there. The claim above is about the end-of-run block, not the method.)

@@ -25,8 +25,6 @@ from PySide6.QtCore import (
 )
 from PySide6.QtWidgets import (
     QDialog,
-    QFrame,
-    QHBoxLayout,
     QLabel,
     QPlainTextEdit,
     QPushButton,
@@ -36,6 +34,7 @@ from PySide6.QtWidgets import (
 from . import flatpak_details, package_details, package_views
 from .packages import Package, PackageModel
 from .placement import center_on_parent
+from .settings_dialog import button_strip
 
 # System packages take their details from zypper and rpm (§4.1), Flatpaks from
 # their remote's AppStream catalogue (§4.7). Firmware and leftovers have none.
@@ -420,16 +419,10 @@ class PackageDetailsDialog(QDialog):
         self.text.setAccessibleName(QCoreApplication.translate("details_dialog", "Package details"))
         root.addWidget(self.text, 1)
 
-        strip = QFrame()
-        strip.setObjectName("DialogButtons")
-        btns = QHBoxLayout(strip)
-        btns.setContentsMargins(0, 0, 0, 0)
-        btns.addStretch(1)
         close = QPushButton(QCoreApplication.translate("details_dialog", "Close"))
         close.setObjectName("GhostBtn")
         close.clicked.connect(self.reject)
-        btns.addWidget(close)
-        root.addWidget(strip)
+        root.addWidget(button_strip(close))
 
     def showEvent(self, event):
         super().showEvent(event)

@@ -8,14 +8,10 @@ interpolated into a root shell.
 """
 from __future__ import annotations
 
-from datetime import datetime
-
 import shiboken6
 from PySide6.QtCore import QCoreApplication, QProcess, Qt, QTimer
 from PySide6.QtWidgets import (
     QDialog,
-    QFrame,
-    QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -26,13 +22,14 @@ from PySide6.QtWidgets import (
 
 from . import i18n, markers, paths
 from .placement import center_on_parent
+from .settings_dialog import button_strip
 
 
 class RollbackDialog(QDialog):
     """Pick which pre-update restore point to roll back to (ONEUP-0020).
 
     Listing only — the destructive rollback itself is confirmed and run (via one
-    pkexec prompt) back in ``Updater.rollback``. Each ``snapshots`` entry is an
+    pkexec prompt) by ``rollback``, in this module. Each ``snapshots`` entry is an
     (id, date, description) tuple sourced from @@SNAPSHOT_ITEM@@ markers; the
     engine already trimmed and ordered them oldest→newest, so we show them
     newest-first and pre-select the pre-update snapshot."""
@@ -67,20 +64,13 @@ class RollbackDialog(QDialog):
         self.list.itemDoubleClicked.connect(lambda *_: self.accept())
         root.addWidget(self.list, 1)
 
-        strip = QFrame()
-        strip.setObjectName("DialogButtons")
-        btns = QHBoxLayout(strip)
-        btns.setContentsMargins(0, 0, 0, 0)
-        btns.addStretch(1)
         ok = QPushButton(QCoreApplication.translate("rollback", "Roll back && reboot"))
         ok.setObjectName("RunBtn")
         ok.clicked.connect(self.accept)
         cancel = QPushButton(QCoreApplication.translate("rollback", "Cancel"))
         cancel.setObjectName("GhostBtn")
         cancel.clicked.connect(self.reject)
-        btns.addWidget(ok)
-        btns.addWidget(cancel)
-        root.addWidget(strip)
+        root.addWidget(button_strip(ok, cancel))
 
     def selected_id(self) -> str:
         """The chosen snapshot number, or "" if nothing valid is selected. Re-checks
@@ -216,7 +206,6 @@ def _thin_snapshots(win):
     win.status.setText(QCoreApplication.translate(
         "rollback",
         "Thinning snapshots… (approve the password popup)"))
-    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     p = QProcess(win)
     p.setProcessChannelMode(QProcess.MergedChannels)
     p.finished.connect(lambda _c, _s, pr=p: _on_thin_finished(win, pr))
@@ -224,8 +213,7 @@ def _thin_snapshots(win):
     p.errorOccurred.connect(lambda err: err == QProcess.ProcessError.FailedToStart
                             and _thin_not_started(win))
     win._thin_proc = p
-    argv = paths.engine_argv(
-        "--thin-snapshots", f"--log={paths.STATE_LOG_DIR / f'{stamp}.thin.log'}")
+    argv = paths.engine_argv("--thin-snapshots", f"--log={paths.new_log('thin')}")
     p.start(argv[0], argv[1:])
 
 

@@ -205,7 +205,9 @@ class Updater(QMainWindow):
         self._unchecked = []         # reasons a --check couldn't read a source (ONEUP-0056)
         self._reboot = False
         self._reboot_reason = ""     # optional "why a reboot matters" phrase from the engine
-        self._installed_count = ""   # system packages changed, as reported by the engine
+        # Two meanings, by mode: a run's system packages changed (@@INSTALLED@@), or a
+        # check's updates waiting (@@CHECK@@|TOTAL). Text; readers take a non-number as 0.
+        self._installed_count = ""
         self._installed_basis = ""   # a check's TOTAL basis: "at-least" or "" (ONEUP-0329)
         self._system_pending = 0     # system updates a check found (ONEUP-0300)
         self._sys_changed = False
@@ -266,6 +268,7 @@ class Updater(QMainWindow):
         self._tray_timer = None
         self._tray_total = 0
         self._tray_at_least = False  # the last total was the rootless floor (ONEUP-0329)
+        self._tray_uncertain = False  # the last check could not read every source
         self._tray_checked_at = None
         self._tray_hint_shown = False
         self._local_server = None
@@ -304,7 +307,7 @@ class Updater(QMainWindow):
         root.setContentsMargins(20, 18, 20, 18)
         root.setSpacing(12)
 
-        # Header: title + tagline on the left; weekly-check + recenter on the right.
+        # Header: title + tagline on the left; Settings, Recenter and About on the right.
         header = QLabel(APP_NAME)
         header.setObjectName("Header")
         tagline = QLabel(QCoreApplication.translate(
@@ -317,188 +320,7 @@ class Updater(QMainWindow):
         titleblock.addWidget(header)
         titleblock.addWidget(tagline)
 
-        autostart._refresh_stale_launchers()
-        self.auto_btn = QPushButton()
-        self.auto_btn.setObjectName("GhostBtn")
-        self.auto_btn.setCheckable(True)
-        self.auto_btn.setCursor(Qt.PointingHandCursor)
-        self.auto_btn.setToolTip(
-            QCoreApplication.translate(
-                "window",
-                "Check weekly in the background and notify you when updates are "
-                "ready"))
-        self.auto_btn.setChecked(autostart._autocheck_enabled())
-        autostart._refresh_autocheck_label(self)
-        self.auto_btn.toggled.connect(partial(autostart.on_autocheck_toggled, self))
-
-        # Opt-in "remember my authorization": stop prompting for the password on
-        # every update. Off by default; the real state is probed from the engine
-        # after the window is built (_query_auth_status). On a service install the
-        # Settings dialog shows one line in its place, and the button stays as the
-        # probe's state for the automatic-update coupling (ONEUP-0249 §4.10).
-        self._service_route = auth.service_route()
-        self.auth_btn = QPushButton()
-        self.auth_btn.setObjectName("GhostBtn")
-        self.auth_btn.setCheckable(True)
-        self.auth_btn.setCursor(Qt.PointingHandCursor)
-        self.auth_btn.setToolTip(QCoreApplication.translate(
-            "window",
-            "Stop asking for your password on every update (opt-in; can be "
-            "switched off to revoke instantly)"))
-        auth._refresh_auth_label(self)
-        self.auth_btn.toggled.connect(partial(auth.on_auth_toggled, self))
-
-        # Automatic weekly updates (ONEUP-0022). Off by default; enabling it needs
-        # the passwordless rule (coupling enforced in on_autoupdate_toggled). Real
-        # state is read from the systemd-user timer.
-        self.autoupdate_btn = QPushButton()
-        self.autoupdate_btn.setObjectName("GhostBtn")
-        self.autoupdate_btn.setCheckable(True)
-        self.autoupdate_btn.setCursor(Qt.PointingHandCursor)
-        self.autoupdate_btn.setToolTip(QCoreApplication.translate(
-            "window",
-            "Install all updates automatically every week (needs this computer to "
-            "allow updates without a password)") if self._service_route
-            else QCoreApplication.translate(
-            "window",
-            "Install all updates automatically every week (needs "
-            "Passwordless)"))
-        self.autoupdate_btn.setChecked(autostart._autoupdate_enabled())
-        autostart._refresh_autoupdate_label(self)
-        self.autoupdate_btn.toggled.connect(partial(autostart.on_autoupdate_toggled, self))
-
-        # System-tray icon + start-at-boot (ONEUP-0018). Both off by default; disabled
-        # when the desktop has no tray. tray_enabled is a QSettings preference; start-at-boot
-        # reads the real autostart-file existence.
-        self.tray_btn = QPushButton()
-        self.tray_btn.setObjectName("GhostBtn")
-        self.tray_btn.setCheckable(True)
-        self.tray_btn.setCursor(Qt.PointingHandCursor)
-        self.tray_btn.setToolTip(QCoreApplication.translate(
-            "window",
-            "Show a small tray icon that turns amber when updates are waiting"))
-        self.tray_btn.setChecked(self.settings.value("tray_enabled", False, type=bool))
-        tray._refresh_tray_label(self)
-        self.tray_btn.toggled.connect(partial(tray.on_tray_toggled, self))
-
-        self.startboot_btn = QPushButton()
-        self.startboot_btn.setObjectName("GhostBtn")
-        self.startboot_btn.setCheckable(True)
-        self.startboot_btn.setCursor(Qt.PointingHandCursor)
-        self.startboot_btn.setToolTip(QCoreApplication.translate(
-            "window",
-            "Start OneUp automatically at login (needs the tray icon)"))
-        self.startboot_btn.setChecked(autostart._startboot_enabled())
-        autostart._refresh_startboot_label(self)
-        self.startboot_btn.toggled.connect(partial(autostart.on_startboot_toggled, self))
-
-        if not self._tray_available:
-            self.tray_btn.setEnabled(False)
-            self.startboot_btn.setEnabled(False)
-
-        # Laid out inside the Settings dialog (like the toggle buttons above), but
-        # owned here so it persists across dialog opens.
-        self.diag_btn = QPushButton(QCoreApplication.translate("window", "Copy diagnostics"))
-        self.diag_btn.setObjectName("GhostBtn")
-        self.diag_btn.setCursor(Qt.PointingHandCursor)
-        self.diag_btn.setToolTip(QCoreApplication.translate(
-            "window",
-            "Copy version info and your latest update log to the clipboard, "
-            "ready to paste into a bug report"))
-        self.diag_btn.clicked.connect(partial(diagnostics.copy_diagnostics, self))
-
-        # Accessibility controls (ONEUP-0028), laid out in the Settings popup but
-        # owned here like the toggles above. Text size cycles through TEXT_SCALES
-        # rather than using a combo box, matching the existing button idiom.
-        self.textsize_btn = QPushButton()
-        self.textsize_btn.setObjectName("GhostBtn")
-        self.textsize_btn.setCursor(Qt.PointingHandCursor)
-        self.textsize_btn.setToolTip(QCoreApplication.translate(
-            "window",
-            "Make all text larger (on top of your desktop's font size)"))
-        self._refresh_textsize_label()
-        self.textsize_btn.clicked.connect(self.on_textsize_clicked)
-
-        # How long OneUp keeps its own logs (ONEUP-0082). Cycles like Text size: five
-        # choices fit the idiom, and the button names the current one.
-        self.logkeep_btn = QPushButton()
-        self.logkeep_btn.setObjectName("GhostBtn")
-        self.logkeep_btn.setCursor(Qt.PointingHandCursor)
-        self.logkeep_btn.setToolTip(QCoreApplication.translate(
-            "window",
-            "How long OneUp keeps its update logs before deleting them"))
-        self._refresh_logkeep_label()
-        self.logkeep_btn.clicked.connect(self.on_logkeep_clicked)
-
-        # Which of the three layouts the window uses (ONEUP-0239 §4.7). Cycles like
-        # Text size; laid out in Settings, owned here.
-        self.layout_btn = QPushButton()
-        self.layout_btn.setObjectName("GhostBtn")
-        self.layout_btn.setCursor(Qt.PointingHandCursor)
-        self.layout_btn.setToolTip(QCoreApplication.translate(
-            "window",
-            "How the main window is arranged"))
-        self._refresh_layout_label()
-        self.layout_btn.clicked.connect(self.on_layout_clicked)
-
-        self.contrast_btn = QPushButton()
-        self.contrast_btn.setObjectName("GhostBtn")
-        self.contrast_btn.setCheckable(True)
-        self.contrast_btn.setCursor(Qt.PointingHandCursor)
-        self.contrast_btn.setToolTip(QCoreApplication.translate(
-            "window",
-            "Plain black-and-white colours with strong outlines"))
-        self.contrast_btn.setChecked(self.settings.value("high_contrast", False, type=bool))
-        self._refresh_contrast_label()
-        self.contrast_btn.toggled.connect(self.on_contrast_toggled)
-
-        # Whether OneUp asks GitHub for a newer version as it starts — at login too,
-        # when it starts in the tray. On by default; the About dialog's button checks
-        # either way, because pressing it is the asking (ONEUP-0191).
-        self.appcheck_btn = QPushButton()
-        self.appcheck_btn.setObjectName("GhostBtn")
-        self.appcheck_btn.setCheckable(True)
-        self.appcheck_btn.setCursor(Qt.PointingHandCursor)
-        self.appcheck_btn.setToolTip(QCoreApplication.translate(
-            "window",
-            "Look for a newer OneUp each time it starts"))
-        self.appcheck_btn.setChecked(self.settings.value("app_update_check", True, type=bool))
-        self._refresh_appcheck_label()
-        self.appcheck_btn.toggled.connect(self.on_appcheck_toggled)
-
-        # The theme picker (ONEUP-0027 §4.6). A combo box rather than the
-        # cycling-button idiom the two controls above use: nine entries is too
-        # many to cycle through, and a combo shows what else is on offer. Built
-        # here and re-parented into SettingsDialog, which hosts rather than owns.
-        self.theme_combo = QComboBox()
-        self.theme_combo.setObjectName("ThemeCombo")
-        self.theme_combo.setCursor(Qt.PointingHandCursor)
-        self.theme_combo.setToolTip(QCoreApplication.translate(
-            "window",
-            "Colour scheme for the whole app"))
-        self.theme_combo.setAccessibleName(QCoreApplication.translate("window", "Colour theme"))
-        # The popup is a separate focusable child. It gets a name of ours so
-        # it can be styled and so it is not an anonymous focusable widget,
-        # which is the shape that named #RepoScroll and #RollbackList.
-        self.theme_combo.view().setObjectName("ThemeList")
-        self.theme_combo.view().setAccessibleName(QCoreApplication.translate(
-            "window",
-            "Colour theme choices"))
-        self.theme_combo.addItem(QCoreApplication.translate(
-            "window", "Follow system"), theme_mod.SYSTEM)
-        for _th in theme_mod.THEMES:
-            self.theme_combo.addItem(_th.label, _th.id)
-        self._refresh_theme_combo()
-        self.theme_combo.currentIndexChanged.connect(self.on_theme_changed)
-
-        # Where a theme that could not be applied is reported. §7 forbids the one
-        # outcome of a control that silently does nothing, and the console line
-        # apply_app_theme prints is not a user-visible report.
-        self.theme_note = QLabel()
-        self.theme_note.setObjectName("ThemeNote")
-        self.theme_note.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
-        self.theme_note.setWordWrap(True)
-        self.theme_note.setVisible(False)
+        self._build_settings_controls()
 
         self.settings_btn = symbols.SymbolButton(
             symbols.gear, QCoreApplication.translate("window", "Settings"))
@@ -518,14 +340,6 @@ class Updater(QMainWindow):
             "window",
             "Move the window back to the centre of the screen"))
         self.recenter_btn.clicked.connect(self.recenter)
-
-        self.repos_btn = QPushButton(QCoreApplication.translate("window", "Repositories"))
-        self.repos_btn.setObjectName("GhostBtn")
-        self.repos_btn.setCursor(Qt.PointingHandCursor)
-        self.repos_btn.setToolTip(QCoreApplication.translate(
-            "window",
-            "Turn software repositories on/off and clean up duplicates"))
-        self.repos_btn.clicked.connect(self.open_repos)
 
         self.about_btn = QPushButton(QCoreApplication.translate("window", "About"))
         self.about_btn.setObjectName("GhostBtn")
@@ -854,6 +668,196 @@ class Updater(QMainWindow):
             QAccessible.updateAccessibility(
                 QAccessibleEvent(source or self.status, QAccessible.Event.Alert))
 
+    def _build_settings_controls(self):
+        """The controls the Settings popup lays out. Built and owned here, so they
+        persist across the dialog's opens; `SettingsDialog` hosts them."""
+        autostart._refresh_stale_launchers()
+        self.auto_btn = QPushButton()
+        self.auto_btn.setObjectName("GhostBtn")
+        self.auto_btn.setCheckable(True)
+        self.auto_btn.setCursor(Qt.PointingHandCursor)
+        self.auto_btn.setToolTip(
+            QCoreApplication.translate(
+                "window",
+                "Check weekly in the background and notify you when updates are "
+                "ready"))
+        self.auto_btn.setChecked(autostart._autocheck_enabled())
+        autostart._refresh_autocheck_label(self)
+        self.auto_btn.toggled.connect(partial(autostart.on_autocheck_toggled, self))
+
+        # Opt-in "remember my authorization": stop prompting for the password on
+        # every update. Off by default; the real state is probed from the engine
+        # after the window is built (_query_auth_status). On a service install the
+        # Settings dialog shows one line in its place, and the button stays as the
+        # probe's state for the automatic-update coupling (ONEUP-0249 §4.10).
+        self._service_route = auth.service_route()
+        self.auth_btn = QPushButton()
+        self.auth_btn.setObjectName("GhostBtn")
+        self.auth_btn.setCheckable(True)
+        self.auth_btn.setCursor(Qt.PointingHandCursor)
+        self.auth_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Stop asking for your password on every update (opt-in; can be "
+            "switched off to revoke instantly)"))
+        auth._refresh_auth_label(self)
+        self.auth_btn.toggled.connect(partial(auth.on_auth_toggled, self))
+
+        # Automatic weekly updates (ONEUP-0022). Off by default; enabling it needs
+        # the passwordless rule (coupling enforced in on_autoupdate_toggled). Real
+        # state is read from the systemd-user timer.
+        self.autoupdate_btn = QPushButton()
+        self.autoupdate_btn.setObjectName("GhostBtn")
+        self.autoupdate_btn.setCheckable(True)
+        self.autoupdate_btn.setCursor(Qt.PointingHandCursor)
+        self.autoupdate_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Install all updates automatically every week (needs this computer to "
+            "allow updates without a password)") if self._service_route
+            else QCoreApplication.translate(
+            "window",
+            "Install all updates automatically every week (needs "
+            "Passwordless)"))
+        self.autoupdate_btn.setChecked(autostart._autoupdate_enabled())
+        autostart._refresh_autoupdate_label(self)
+        self.autoupdate_btn.toggled.connect(partial(autostart.on_autoupdate_toggled, self))
+
+        # System-tray icon + start-at-boot (ONEUP-0018). Both off by default; disabled
+        # when the desktop has no tray. tray_enabled is a QSettings preference; start-at-boot
+        # reads the real autostart-file existence.
+        self.tray_btn = QPushButton()
+        self.tray_btn.setObjectName("GhostBtn")
+        self.tray_btn.setCheckable(True)
+        self.tray_btn.setCursor(Qt.PointingHandCursor)
+        self.tray_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Show a small tray icon that turns amber when updates are waiting"))
+        self.tray_btn.setChecked(self.settings.value("tray_enabled", False, type=bool))
+        tray._refresh_tray_label(self)
+        self.tray_btn.toggled.connect(partial(tray.on_tray_toggled, self))
+
+        self.startboot_btn = QPushButton()
+        self.startboot_btn.setObjectName("GhostBtn")
+        self.startboot_btn.setCheckable(True)
+        self.startboot_btn.setCursor(Qt.PointingHandCursor)
+        self.startboot_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Start OneUp automatically at login (needs the tray icon)"))
+        self.startboot_btn.setChecked(autostart._startboot_enabled())
+        autostart._refresh_startboot_label(self)
+        self.startboot_btn.toggled.connect(partial(autostart.on_startboot_toggled, self))
+
+        if not self._tray_available:
+            self.tray_btn.setEnabled(False)
+            self.startboot_btn.setEnabled(False)
+
+        self.diag_btn = QPushButton(QCoreApplication.translate("window", "Copy diagnostics"))
+        self.diag_btn.setObjectName("GhostBtn")
+        self.diag_btn.setCursor(Qt.PointingHandCursor)
+        self.diag_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Copy version info and your latest update log to the clipboard, "
+            "ready to paste into a bug report"))
+        self.diag_btn.clicked.connect(partial(diagnostics.copy_diagnostics, self))
+
+        # Accessibility controls (ONEUP-0028). Text size cycles through TEXT_SCALES
+        # rather than using a combo box, matching the existing button idiom.
+        self.textsize_btn = QPushButton()
+        self.textsize_btn.setObjectName("GhostBtn")
+        self.textsize_btn.setCursor(Qt.PointingHandCursor)
+        self.textsize_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Make all text larger (on top of your desktop's font size)"))
+        self._refresh_textsize_label()
+        self.textsize_btn.clicked.connect(self.on_textsize_clicked)
+
+        # How long OneUp keeps its own logs (ONEUP-0082). Cycles like Text size: five
+        # choices fit the idiom, and the button names the current one.
+        self.logkeep_btn = QPushButton()
+        self.logkeep_btn.setObjectName("GhostBtn")
+        self.logkeep_btn.setCursor(Qt.PointingHandCursor)
+        self.logkeep_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "How long OneUp keeps its update logs before deleting them"))
+        self._refresh_logkeep_label()
+        self.logkeep_btn.clicked.connect(self.on_logkeep_clicked)
+
+        # Which of the three layouts the window uses (ONEUP-0239 §4.7). Cycles like
+        # Text size.
+        self.layout_btn = QPushButton()
+        self.layout_btn.setObjectName("GhostBtn")
+        self.layout_btn.setCursor(Qt.PointingHandCursor)
+        self.layout_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "How the main window is arranged"))
+        self._refresh_layout_label()
+        self.layout_btn.clicked.connect(self.on_layout_clicked)
+
+        self.contrast_btn = QPushButton()
+        self.contrast_btn.setObjectName("GhostBtn")
+        self.contrast_btn.setCheckable(True)
+        self.contrast_btn.setCursor(Qt.PointingHandCursor)
+        self.contrast_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Plain black-and-white colours with strong outlines"))
+        self.contrast_btn.setChecked(self.settings.value("high_contrast", False, type=bool))
+        self._refresh_contrast_label()
+        self.contrast_btn.toggled.connect(self.on_contrast_toggled)
+
+        # Whether OneUp asks GitHub for a newer version as it starts — at login too,
+        # when it starts in the tray. On by default; the About dialog's button checks
+        # either way, because pressing it is the asking (ONEUP-0191).
+        self.appcheck_btn = QPushButton()
+        self.appcheck_btn.setObjectName("GhostBtn")
+        self.appcheck_btn.setCheckable(True)
+        self.appcheck_btn.setCursor(Qt.PointingHandCursor)
+        self.appcheck_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Look for a newer OneUp each time it starts"))
+        self.appcheck_btn.setChecked(self.settings.value("app_update_check", True, type=bool))
+        self._refresh_appcheck_label()
+        self.appcheck_btn.toggled.connect(self.on_appcheck_toggled)
+
+        # The theme picker (ONEUP-0027 §4.6). A combo box rather than the
+        # cycling-button idiom of Text size, Log age and Layout: there are too many
+        # themes to cycle through, and a combo shows what else is on offer.
+        self.theme_combo = QComboBox()
+        self.theme_combo.setObjectName("ThemeCombo")
+        self.theme_combo.setCursor(Qt.PointingHandCursor)
+        self.theme_combo.setToolTip(QCoreApplication.translate(
+            "window",
+            "Colour scheme for the whole app"))
+        self.theme_combo.setAccessibleName(QCoreApplication.translate("window", "Colour theme"))
+        # The popup is a separate focusable child. It gets a name of ours so
+        # it can be styled and so it is not an anonymous focusable widget,
+        # which is the shape that named #RepoScroll and #RollbackList.
+        self.theme_combo.view().setObjectName("ThemeList")
+        self.theme_combo.view().setAccessibleName(QCoreApplication.translate(
+            "window",
+            "Colour theme choices"))
+        self.theme_combo.addItem(QCoreApplication.translate(
+            "window", "Follow system"), theme_mod.SYSTEM)
+        for _th in theme_mod.THEMES:
+            self.theme_combo.addItem(_th.label, _th.id)
+        self._refresh_theme_combo()
+        self.theme_combo.currentIndexChanged.connect(self.on_theme_changed)
+
+        # Where a theme that could not be applied is reported. §7 forbids the one
+        # outcome of a control that silently does nothing, and the console line
+        # apply_app_theme prints is not a user-visible report.
+        self.theme_note = QLabel()
+        self.theme_note.setObjectName("ThemeNote")
+        self.theme_note.setTextFormat(Qt.TextFormat.PlainText)  # shown as typed (ONEUP-0183)
+        self.theme_note.setWordWrap(True)
+        self.theme_note.setVisible(False)
+
+        self.repos_btn = QPushButton(QCoreApplication.translate("window", "Repositories"))
+        self.repos_btn.setObjectName("GhostBtn")
+        self.repos_btn.setCursor(Qt.PointingHandCursor)
+        self.repos_btn.setToolTip(QCoreApplication.translate(
+            "window",
+            "Turn software repositories on/off and clean up duplicates"))
+        self.repos_btn.clicked.connect(self.open_repos)
+
     def _read_run_state(self):
         """The engine's record of a run in flight: (pid, log path, steps). None when
         there is no run, or when the record is stale — a pid that is not a live engine
@@ -880,7 +884,7 @@ class Updater(QMainWindow):
         state = self._read_run_state()
         if state is None:
             return False
-        pid, log_path, steps = state
+        pid, log_path, run_steps_text = state
         self._attached_pid = pid
         self._attached_log = Path(log_path)
         self._attached_pos = 0
@@ -891,7 +895,7 @@ class Updater(QMainWindow):
         run._reset_activity(self)
         self._activity_timer.start()
         # The run's own steps, which the summary and the tray judge it by (ONEUP-0400).
-        self._run_steps = [s for s in steps.split(",") if s]
+        self._run_steps = [s for s in run_steps_text.split(",") if s]
         self._total = len(self._run_steps)
         self.bar.setRange(0, max(self._total, 1))
         self.set_controls_enabled(False)
@@ -1210,11 +1214,10 @@ class Updater(QMainWindow):
         self.settings.setValue("theme", self.theme_combo.currentData())
         apply_app_theme(QApplication.instance())
         self._show_theme_error()
-        # The tray icon is a QIcon built in a method and handed to setIcon at two
-        # call sites, neither of which fires on a theme change — so a window
-        # holding one rebuilds it here (INV-8). A window with no tray does nothing.
-        if getattr(self, "_tray", None) is not None:
-            tray.refresh_icon(self)
+        # apply_app_theme leaves the tray alone — its icon is painted from the palette
+        # and has no parent to re-theme — so rebuild it here (INV-8). refresh_icon does
+        # nothing for a window with no tray.
+        tray.refresh_icon(self)
 
     def _show_theme_error(self):
         note = theme_mod.last_theme_error
@@ -1306,8 +1309,8 @@ class Updater(QMainWindow):
         repos.RepoManagerDialog(self, repo_list).exec()
 
     def open_settings(self):
-        """Open (or re-raise) the Settings popup — created once so the three
-        toggle buttons live in it permanently."""
+        """Open (or re-raise) the Settings popup — created once, so the controls it
+        hosts live in it permanently."""
         if self._settings_dialog is None:
             self._settings_dialog = SettingsDialog(self)
         self.diag_btn.setText(QCoreApplication.translate(

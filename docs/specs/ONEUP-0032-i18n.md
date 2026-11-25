@@ -384,7 +384,7 @@ the code now depends on.
   example) and the `notify-send` body `ONEUP-0077` composes, which
   `wording-and-translation.md` §6.1 names explicitly. Both deliver prose a user reads or
   hears, and neither passes through any setter above. **A project helper whose parameter
-  reaches one of these calls is on the list too** — today `banners._show_warning`,
+  reaches one of these calls is on the list too** — today `banners.show_warning`,
   `banners._confirm_reboot` and `run._set_activity` — because inside it the sentence is
   only a variable.
   *Test:* `tests/i18n-check.py`, the wrapping check. It reads the call's argument, and passes

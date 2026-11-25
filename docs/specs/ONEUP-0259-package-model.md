@@ -306,7 +306,7 @@ gone; each layout's package page shows the model instead
 
 `TaskRow` drops `add_detail_item` and `_items`. It subscribes to the model and redraws its
 list from `packages(key)`, one line per package: name, `old → edition`, size, and a state
-word. The size uses `_format_size` in `oneup/gui/markers.py`. An unknown size prints
+word. The size uses `format_size` in `oneup/gui/markers.py`. An unknown size prints
 nothing.
 
 The state words live in one table, `STATE_WORDS` in `oneup/gui/steps.py`, marked with

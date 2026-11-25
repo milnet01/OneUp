@@ -1,7 +1,7 @@
 """Describing this machine when the user reports a problem.
 
-The clipboard bug-report bundle and the two figures it needs — the newest real
-run log, and what zypper's package cache weighs.
+The clipboard bug-report bundle and the newest real run log it attaches. Also
+`cache_bytes`, what zypper's package cache weighs, which the download meter reads.
 """
 from __future__ import annotations
 
@@ -18,10 +18,12 @@ from PySide6.QtWidgets import QApplication
 from .. import APP_VERSION, APP_VERSION_LABEL
 from . import paths, steps
 
+# The most of the run log the bundle carries: a long run's whole log would put a
 # multi-megabyte blob onto the clipboard. Errors sit near the end, so keep the tail.
 DIAG_LOG_CAP = 200 * 1024
 
-def _latest_run_log(log_dir: Path) -> Path | None:
+
+def latest_run_log(log_dir: Path) -> Path | None:
     """Newest real update-run log in log_dir, or None.
 
     Run logs are named ``<timestamp>.log`` (one dot). The check/auth/size probes
@@ -56,13 +58,15 @@ def _os_release_pretty() -> str:
 
 def build_diagnostics(version: str, os_pretty: str, enabled: list[str],
                       log_name: str | None, log_text: str | None,
-                      when: str, home: str, host: str) -> str:
-    """Assemble the clipboard bug-report bundle (pure — no I/O, no clock).
+                      when: str, home: str, host: str, user: str = "") -> str:
+    """Assemble the clipboard bug-report bundle. Pure: everything it reads is an
+    argument, the login included, so a test's text is not rewritten by whoever runs it.
 
-    Scrubs the home path (-> ~) and hostname (-> <host>) across the whole
-    payload, log body included, so a public paste doesn't leak the username or
-    machine name. An oversized log is trimmed to its last DIAG_LOG_CAP chars after it
-    is scrubbed, so the cut cannot split a login the scrub would have caught.
+    Scrubs the home path (-> ~), URL logins (-> <login>), the user name (-> <user>)
+    and the host name (-> <host>) across the whole payload, log body included, so a
+    public paste doesn't leak them. An oversized log is trimmed to its last
+    DIAG_LOG_CAP chars after it is scrubbed, so the cut cannot split a login the
+    scrub would have caught.
     """
     tasks = "  ".join(f"{key} {'✓' if key in enabled else '✗'}"
                       for key, _t, _d in steps.TASKS)
@@ -76,17 +80,17 @@ def build_diagnostics(version: str, os_pretty: str, enabled: list[str],
     ]
     if log_text is None:
         out.append("--- no update has been run yet ---")
-        return _scrub("\n".join(out), home, host)
+        return _scrub("\n".join(out), home, host, user)
     out.append(f"--- latest run log ({log_name}) ---")
     # Scrubbed apart from the header so no text is scrubbed twice: a user called "user"
     # would turn a "<user>" already written into "<<user>>".
-    log_text = _scrub(log_text, home, host)
+    log_text = _scrub(log_text, home, host, user)
     if len(log_text) > DIAG_LOG_CAP:
         log_text = "[… earlier output trimmed …]\n" + log_text[-DIAG_LOG_CAP:]
-    return _scrub("\n".join(out), home, host) + "\n" + log_text
+    return _scrub("\n".join(out), home, host, user) + "\n" + log_text
 
 
-def _scrub(report: str, home: str, host: str) -> str:
+def _scrub(report: str, home: str, host: str, user: str) -> str:
     """Take the home path, URL logins, the user name and the host name out of `report`."""
     if home:
         report = report.replace(home, "~")
@@ -94,7 +98,6 @@ def _scrub(report: str, home: str, host: str) -> str:
     # above is not the only place a user name appears — sudo's "user X is not
     # allowed" names it bare — and a repository URL can carry a login (ONEUP-0401).
     report = _URL_LOGIN.sub(r"\1<login>@", report)
-    user = _user_name()
     if user:
         report = re.sub(rf"(?<![\w.-]){re.escape(user)}(?![\w-])", "<user>", report)
     if host:
@@ -148,7 +151,7 @@ def cache_bytes() -> int:
 def copy_diagnostics(win):
     """Bundle version info + the latest run log onto the clipboard for a bug
     report (the Settings dialog's 'Copy diagnostics' button)."""
-    log = _latest_run_log(paths.STATE_LOG_DIR)
+    log = latest_run_log(paths.STATE_LOG_DIR)
     log_name = log_text = None
     if log is not None:
         log_name = log.name
@@ -163,7 +166,7 @@ def copy_diagnostics(win):
     report = build_diagnostics(
         version, _os_release_pretty(), win.selected_steps(),
         log_name, log_text, datetime.now().strftime("%Y-%m-%d %H:%M"),
-        str(Path.home()), socket.gethostname())
+        str(Path.home()), socket.gethostname(), _user_name())
     QApplication.clipboard().setText(report)
     win.diag_btn.setText(QCoreApplication.translate("diagnostics", "Copied ✓"))
     win._settings_status(QCoreApplication.translate(

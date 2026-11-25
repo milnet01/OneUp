@@ -10,7 +10,9 @@ from PySide6.QtCore import QT_TRANSLATE_NOOP
 
 # key, title, short description (ONEUP-0239 §3 item 13). Order = run order. Marked
 # here and translated where shown, so the language can change without the table
-# being rebuilt (ONEUP-0032 §4.3).
+# being rebuilt (ONEUP-0032 §4.3). A key added here goes into SHORT_TITLES and
+# IN_PROGRESS too, in the same order: their readers use .get(), so a missing one
+# fails silently, and gui-smoke checks the three agree.
 TASKS = [
     ("system", QT_TRANSLATE_NOOP("steps", "System packages"),
      QT_TRANSLATE_NOOP("steps", "Packages from your repositories")),

@@ -8,13 +8,10 @@ from __future__ import annotations
 
 import contextlib
 import os
-import shutil
 import subprocess
 import sys
-from datetime import datetime
 
 from PySide6.QtCore import QCoreApplication, QSettings
-from PySide6.QtNetwork import QLocalSocket
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from .. import APP_ID, APP_NAME
@@ -66,21 +63,15 @@ def _discard_stdout() -> None:
 def _notify(title: str, body: str) -> None:
     """Raise a desktop notification with no display and no Qt: the desktop's
     notification service, as the engine did (ONEUP-0077 INV-4). Never fatal."""
-    if not shutil.which("notify-send"):
-        return
-    with contextlib.suppress(OSError, subprocess.SubprocessError):
-        subprocess.run(  # noqa: S603 — fixed argv, no shell.
-            ["notify-send", "-a", APP_NAME, "-i", APP_ID, title, body],  # noqa: S607
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, check=False)
+    tray.notify(title, body, wait=True)
 
 
-def _headless_log(suffix: str) -> str | None:
+def _headless_log(kind: str) -> str | None:
     """A timestamped log under the window's own log folder, so a notification can
     name it (ONEUP-0077 §4). None, said on stderr, when the folder can't be made."""
     if not paths.log_dir_ready(quiet=True):
         return None
-    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    return str(paths.STATE_LOG_DIR / f"{stamp}{suffix}")
+    return str(paths.new_log(kind))
 
 
 def _headless_app() -> QCoreApplication:
@@ -98,15 +89,14 @@ def _headless_check() -> int:
     if not paths.engine_available():     # the resolver has said what it tried, on stderr
         return 1
     app = _headless_app()  # noqa: F841 — held for the run: the catalogues live on it
-    log = _headless_log(".check.log")
+    log = _headless_log("check")
     if log is None:
         return 1
     seen = {"total": 0, "reasons": [], "at_least": False}
 
     def read(tag: str, parts: list[str]) -> None:
-        if tag == "CHECK" and len(parts) > 1 and parts[0] == "TOTAL":
-            seen["total"] = int(parts[1]) if parts[1].isdecimal() else 0
-            seen["at_least"] = len(parts) > 3 and parts[3] == "at-least"
+        if tag == "CHECK" and parts[0] == "TOTAL":
+            seen["total"], seen["at_least"] = markers.check_count(parts)
         elif tag == "CHECK_UNKNOWN":
             seen["reasons"].append(markers.render_check_unknown(parts[1:]))
 
@@ -127,7 +117,7 @@ def _headless_update() -> int:
     if not paths.engine_available():     # the resolver has said what it tried, on stderr
         return 1
     app = _headless_app()  # noqa: F841 — held for the run: the catalogues live on it
-    log = _headless_log(".log")
+    log = _headless_log("")
     if log is None:
         return 1
     seen = {"done": None, "count": "", "changed": False, "skipped": []}
@@ -147,21 +137,15 @@ def _headless_update() -> int:
     return rc
 
 
-def _raise_existing_instance(intent: str) -> bool:
+def _raise_existing_instance(intent: bytes) -> bool:
     """True if another OneUp for this user answered, and was told what we wanted.
 
-    `intent` is "show" for a person launching OneUp — raise the running window — or
-    "tray" for the autostart entry, which must NOT throw a window up over whatever
-    the user is doing at login; it only needs to learn that someone is resident.
+    `intent` is `tray.SHOW_INTENT` for a person launching OneUp — raise the running
+    window — or `tray.TRAY_INTENT` for the autostart entry, which must NOT throw a
+    window up over whatever the user is doing at login; it only needs to learn that
+    someone is resident.
     """
-    sock = QLocalSocket()
-    sock.connectToServer(tray.single_instance_name())
-    if not sock.waitForConnected(tray.SINGLE_INSTANCE_TIMEOUT_MS):
-        return False
-    sock.write(intent.encode())
-    sock.waitForBytesWritten(tray.SINGLE_INSTANCE_TIMEOUT_MS)
-    sock.disconnectFromServer()
-    return True
+    return tray.send_intent(tray.single_instance_name(), intent)
 
 
 def _build_window(argv: list[str]) -> Updater | None:
@@ -175,7 +159,7 @@ def _build_window(argv: list[str]) -> Updater | None:
     before the loser found out (ONEUP-0427)."""
     owned, server = tray._claim_single_instance(QApplication.instance())
     if not owned:
-        _raise_existing_instance("tray" if "--tray" in argv else "show")
+        _raise_existing_instance(tray.TRAY_INTENT if "--tray" in argv else tray.SHOW_INTENT)
         return None
     win = Updater()
     if server is not None:

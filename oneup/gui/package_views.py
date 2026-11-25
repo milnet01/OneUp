@@ -48,7 +48,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import i18n, steps, symbols, theme
-from .markers import WIDEST_SIZE, _format_size
+from .markers import WIDEST_SIZE, format_size
 from .packages import Package, PackageModel
 
 # The three groups every count and the size strip use, by the state a view shows.
@@ -132,7 +132,7 @@ def downloading_now(win, package: Package) -> bool:
 
 
 def size_text(package: Package) -> str:
-    return _format_size(package.size) if package.size else ""
+    return format_size(package.size) if package.size else ""
 
 
 def counts(model: PackageModel, packages: list[Package]) -> dict[str, int]:
@@ -157,8 +157,8 @@ def total_phrase(packages: list[Package]) -> str:
         return QCoreApplication.translate("package_views", "size not known") if unknown else ""
     if unknown:
         return QCoreApplication.translate("package_views", "{size}, some sizes not known").format(
-            size=_format_size(total))
-    return _format_size(total)
+            size=format_size(total))
+    return format_size(total)
 
 
 def download_sentence_sample(count: int, size: str) -> str:
@@ -178,9 +178,9 @@ def download_sentence(packages: list[Package]) -> str:
     if total and unknown:
         return QCoreApplication.translate(
             "package_views", "{count} · {size} to download, some sizes not known").format(
-            count=count, size=_format_size(total))
+            count=count, size=format_size(total))
     if total:
-        return download_sentence_sample(len(packages), _format_size(total))
+        return download_sentence_sample(len(packages), format_size(total))
     if unknown:
         return QCoreApplication.translate("package_views", "{count} · size not known").format(
             count=count)

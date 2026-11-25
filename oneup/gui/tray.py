@@ -7,6 +7,7 @@ zypper lock whether or not a tray icon is involved (ONEUP-0084).
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import subprocess
@@ -21,7 +22,7 @@ from PySide6.QtNetwork import QAbstractSocket, QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .. import APP_ID, APP_NAME
-from . import app_update, autostart, i18n, markers, paths, run, theme
+from . import app_update, autostart, i18n, markers, paths, run, settings_dialog, theme
 from .theme import _app_icon
 
 # Single-instance handshake budget (ONEUP-0084). Both ends are local sockets on the
@@ -31,8 +32,12 @@ SINGLE_INSTANCE_TIMEOUT_MS = 500
 # How long a launch waits for another one's claim (ONEUP-0427). A holder probes once and
 # writes once, each bounded by the timeout above, so this covers both with room over.
 CLAIM_LOCK_TIMEOUT_MS = 4 * SINGLE_INSTANCE_TIMEOUT_MS
-# What a copy that lost the socket writes to the winner before hanging up (ONEUP-0403).
-PROBE_INTENT = b"probe"
+# What a launch that lost the socket tells the winner (`send_intent`). Anything else
+# reads as "a person launched OneUp" and raises the window, so an intent is named
+# here, never spelled at its sender (ONEUP-0403).
+PROBE_INTENT = b"probe"   # another copy checking whether this one is alive
+TRAY_INTENT = b"tray"     # the login autostart entry: stay hidden
+SHOW_INTENT = b"show"     # a person launched OneUp: raise the window
 
 
 # Tray: one QTimer drives both the short initial check and the recurring one, so a
@@ -155,19 +160,18 @@ def _on_traycheck_output(win):
 
 
 def _parse_tray_line(win, line: str):
-    # Engine emits @@CHECK@@|TOTAL|<n>|updates available (three fields). Read field
-    # 1 like handle_marker does; a naive int(after-prefix) would choke on field 2.
     # A source the check couldn't read makes the total a floor, not an answer —
     # the tray must not sit there quietly claiming "up to date" (ONEUP-0056).
-    # Ordered first: the engine emits CHECK_UNKNOWN before the TOTAL it qualifies.
-    if line.startswith("@@CHECK_UNKNOWN@@|"):
+    # The engine emits CHECK_UNKNOWN before the TOTAL it qualifies.
+    split = markers.split_marker(line) if line.startswith("@@") else None
+    if split is None:
+        return
+    tag, parts, _rest = split
+    if tag == "CHECK_UNKNOWN":
         win._traycheck_unknown = True
-    elif line.startswith("@@CHECK@@|"):
-        parts = line[len("@@CHECK@@|"):].split("|")
-        if len(parts) >= 2 and parts[0] == "TOTAL":
-            _apply_tray_total(win, int(parts[1]) if parts[1].isdecimal() else 0,
-                                   uncertain=win._traycheck_unknown,
-                                   at_least=len(parts) > 3 and parts[3] == "at-least")
+    elif tag == "CHECK" and parts[0] == "TOTAL":
+        total, at_least = markers.check_count(parts)
+        apply_tray_total(win, total, uncertain=win._traycheck_unknown, at_least=at_least)
 
 
 def _on_traycheck_finished(win, *args):
@@ -194,7 +198,7 @@ def _tooltip(n: int, uncertain: bool = False, at_least: bool = False) -> str:
     return QCoreApplication.translate("tray", "{app} — up to date").format(app=APP_NAME)
 
 
-def _apply_tray_total(win, n: int, uncertain: bool = False, at_least: bool = False):
+def apply_tray_total(win, n: int, uncertain: bool = False, at_least: bool = False):
     win._tray_total = n
     win._tray_at_least = at_least
     win._tray_uncertain = uncertain   # a rebuilt tooltip must not drop it (ONEUP-0400)
@@ -257,14 +261,22 @@ def _live_copy_answers(name: str) -> bool:
     The probe is itself a connection, so it says so: with no intent the winner
     would read "a person launched OneUp" and throw its window up at login
     (ONEUP-0403)."""
-    probe = QLocalSocket()
-    probe.connectToServer(name)
-    if not probe.waitForConnected(SINGLE_INSTANCE_TIMEOUT_MS):
+    return send_intent(name, PROBE_INTENT)
+
+
+def send_intent(name: str, intent: bytes) -> bool:
+    """Tell the copy listening on `name` what this launch wants; True if one answered.
+
+    The one sender of every intent — the probe here and `app`'s hand-over — so the
+    handshake cannot differ between them. `_on_single_instance_connection` reads it."""
+    sock = QLocalSocket()
+    sock.connectToServer(name)
+    if not sock.waitForConnected(SINGLE_INSTANCE_TIMEOUT_MS):
         return False
-    probe.write(PROBE_INTENT)
-    probe.flush()
-    probe.waitForBytesWritten(SINGLE_INSTANCE_TIMEOUT_MS)
-    probe.disconnectFromServer()
+    sock.write(intent)
+    sock.flush()
+    sock.waitForBytesWritten(SINGLE_INSTANCE_TIMEOUT_MS)
+    sock.disconnectFromServer()
     return True
 
 
@@ -304,7 +316,7 @@ def _on_single_instance_connection(win):
     conn.close()
     # The autostart entry, and another copy's liveness probe, only need to learn that
     # someone is already resident. Anything else is a person launching OneUp.
-    if intent not in ("tray", PROBE_INTENT.decode()):
+    if intent not in (TRAY_INTENT.decode(), PROBE_INTENT.decode()):
         _show_window(win)
 
 
@@ -364,8 +376,7 @@ def _ensure_tray(win):
     win._tray.setToolTip(
         QCoreApplication.translate("tray", "{app} — not checked yet").format(app=APP_NAME)
         if win._tray_checked_at is None else _tooltip(
-            win._tray_total, getattr(win, "_tray_uncertain", False),
-            at_least=win._tray_at_least))
+            win._tray_total, win._tray_uncertain, at_least=win._tray_at_least))
     win._tray.show()
     _arm_single_instance(win)
     win._tray_timer = QTimer(win)
@@ -385,7 +396,7 @@ def _teardown_tray(win):
         win._tray_timer.stop()
         win._tray_timer = None
     if win._tray is not None:
-        if isinstance(win._tray, QSystemTrayIcon):
+        if isinstance(win._tray, QSystemTrayIcon):   # tests stand an object() in for one
             win._tray.hide()
         win._tray = None
     QApplication.setQuitOnLastWindowClosed(True)
@@ -401,9 +412,7 @@ def _refresh_tray_label(win):
 
 
 def _set_tray_checked(win, on: bool):
-    win.tray_btn.blockSignals(True)
-    win.tray_btn.setChecked(on)
-    win.tray_btn.blockSignals(False)
+    settings_dialog.set_quietly(win.tray_btn, on)
     _refresh_tray_label(win)
 
 
@@ -421,18 +430,28 @@ def on_tray_toggled(win, on: bool):
 
 
 def _notify_tray_hint(win):
-    """A one-off 'still running in the tray' nudge. A DIRECT notify-send (keeps
-    _notify_when_away's which-guard but drops its isActiveWindow guard, which would
-    suppress it since the window is still active at close time)."""
+    """A one-off 'still running in the tray' nudge. Not `run._notify_when_away`: its
+    isActiveWindow guard would suppress it, as the window is still active at close."""
+    notify(APP_NAME, QCoreApplication.translate(
+        "tray", "OneUp is still running in the tray — right-click the icon to quit."))
+
+
+def notify(title: str, body: str, urgency: str | None = None, wait: bool = False) -> None:
+    """Raise a desktop notification through the desktop's own service, notify-send.
+    Best effort: no notify-send, or one that cannot start, is silent. The window's
+    notifications and the headless timer paths all send through here.
+
+    `wait`: the headless paths exit straight after, so they wait for it, bounded."""
     if not shutil.which("notify-send"):
         return
-    body = QCoreApplication.translate(
-        "tray", "OneUp is still running in the tray — right-click the icon to quit.")
-    try:
-        subprocess.Popen(  # noqa: S603 — fixed argv, no shell.
-            ["notify-send", "-a", APP_NAME, "-i", APP_ID, APP_NAME, body],  # noqa: S607
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except OSError:
-        pass
+    argv = ["notify-send", "-a", APP_NAME, "-i", APP_ID,
+            *(["-u", urgency] if urgency else []), title, body]
+    with contextlib.suppress(OSError, subprocess.SubprocessError):
+        if wait:
+            subprocess.run(argv, stdout=subprocess.DEVNULL,  # noqa: S603 — fixed argv, no shell.
+                           stderr=subprocess.DEVNULL, timeout=10, check=False)
+        else:
+            subprocess.Popen(argv, stdout=subprocess.DEVNULL,  # noqa: S603 — fixed argv.
+                             stderr=subprocess.DEVNULL)
 
 

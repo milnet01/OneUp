@@ -801,7 +801,7 @@ def main() -> int:
 
     # Same argument, same place, for the same reason (ONEUP-0099). Every Updater() runs
     # _query_auth_status, whose settle can now reach _stand_down_autoupdate — and that
-    # calls the REAL _remove_user_timer, which shells out to `systemctl --user disable
+    # calls the REAL remove_user_timer, which shells out to `systemctl --user disable
     # --now` against the developer's own session. Across 56 constructions, "the scenarios
     # that care are careful" is not the same property as "the suite cannot touch the
     # machine" (testing.md §2). Scenarios that assert on it re-enable it locally with a spy.
@@ -940,38 +940,38 @@ def main() -> int:
 
     check("system row badge shows outcome + timing",
           w.rows["system"].badge.text() == "3 installed  ·  42s")
-    check("_format_duration formats seconds", markers._format_duration(42) == "42s")
-    check("_format_duration formats minutes", markers._format_duration(65) == "1m 5s")
-    check("_format_duration handles sub-second", markers._format_duration(0) == "<1s")
+    check("format_duration formats seconds", markers.format_duration(42) == "42s")
+    check("format_duration formats minutes", markers.format_duration(65) == "1m 5s")
+    check("format_duration handles sub-second", markers.format_duration(0) == "<1s")
     # ONEUP-0190: sizes are binary, so they carry binary unit names. ONEUP-0325: KiB
     # and MiB carry one decimal place, a whole number included, as every sketch
     # prints them ("57.6 KiB", "1.0 MiB"); bytes stay whole.
-    _sizes = tuple(markers._format_size(n) for n in
+    _sizes = tuple(markers.format_size(n) for n in
                    (900, 512 << 10, 59000, 41 << 20, 15518924, 3 << 29))
-    check(f"_format_size labels binary units, with one decimal for KiB and MiB ({_sizes})",
+    check(f"format_size labels binary units, with one decimal for KiB and MiB ({_sizes})",
           _sizes == ("900 B", "512.0 KiB", "57.6 KiB", "41.0 MiB", "14.8 MiB", "1.5 GiB"))
     # ONEUP-0403: the sample that sizes a size's place is as wide as the widest size the
     # formatter prints. "999.9 MiB" was not, so a package of about 1 MB lost a digit.
     _fm = QFontMetricsF(QApplication.font())
-    _widest = max((markers._format_size(n) for n in
+    _widest = max((markers.format_size(n) for n in
                    ((1 << 20) - 1, (1 << 30) - 1, 1023 << 10, 1023 << 20, 999 << 30)),
                   key=_fm.horizontalAdvance)
     check(f"ONEUP-0403 no size is wider than the sample its place is sized by ({_widest})",
           _fm.horizontalAdvance(_widest) <= _fm.horizontalAdvance(markers.WIDEST_SIZE))
     # ONEUP-0190: a status outside ok / skip / fail earned no "Done".
     check("an unrecognised step status badges as unknown, not a success",
-          markers._step_badge("spliced", "installed", ["3"]) == "Result unknown")
+          markers.step_badge("spliced", "installed", ["3"]) == "Result unknown")
     # ONEUP-0108 INV-1, the STEP_END family: a code the table does not know, or a
     # known one whose arguments do not fit, shows the bare code — the short form,
     # since a badge has no room for a sentence — and never raises.
     check("an unknown STEP_END code shows itself as the badge",
-          markers._step_badge("ok", "zzz-new-outcome", []) == "zzz-new-outcome")
+          markers.step_badge("ok", "zzz-new-outcome", []) == "zzz-new-outcome")
     check("a known STEP_END code with an argument too few shows the bare code",
-          markers._step_badge("ok", "installed", []) == "installed")
+          markers.step_badge("ok", "installed", []) == "installed")
     check("a known STEP_END code with an argument too many shows the bare code",
-          markers._step_badge("ok", "installed", ["3", "4"]) == "installed")
+          markers.step_badge("ok", "installed", ["3", "4"]) == "installed")
     check("an empty STEP_END code still badges something readable",
-          markers._step_badge("ok", "", []) == "Result unknown")
+          markers.step_badge("ok", "", []) == "Result unknown")
     check("flatpak row badge = 'Up to date'", w.rows["flatpak"].badge.text() == "Up to date")
     check("firmware skip badge = 'Not installed'",
           w.rows["firmware"].badge.text() == "Not installed")
@@ -1693,8 +1693,8 @@ def main() -> int:
     try:
         for label, call in (
                 ("asking whether a timer is on", lambda: autostart._timer_enabled("x.timer")),
-                ("turning a timer off", lambda: autostart._remove_user_timer("oneup-hang")),
-                ("turning a timer on", lambda: autostart._install_user_timer(
+                ("turning a timer off", lambda: autostart.remove_user_timer("oneup-hang")),
+                ("turning a timer on", lambda: autostart.install_user_timer(
                     None, "oneup-hang", "hang test", "--check"))):
             began = time.monotonic()
             got = call()
@@ -1740,7 +1740,7 @@ def main() -> int:
           w3.warn_btn.text() == "Show details")
     check("a later pre-flight warning disarms the thin action", w3._warn_snapshots is False)
     run.handle_line(w3, "@@REPO@@|warn|duplicate|http://a")
-    banners._show_warning(w3, "A download failed — check your internet connection, then retry.")
+    banners.show_warning(w3, "A download failed — check your internet connection, then retry.")
     check("a failure hint resets the button after a repository advisory",
           w3.warn_btn.text() == "Show details" and w3._warn_repo_dup is False)
 
@@ -2135,7 +2135,7 @@ def main() -> int:
     # says "up to date" with or without it.
     w = window.Updater()
     w._check_mode = True
-    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False, **kw: _tray_calls.append(kw))
+    _patch(tray, "apply_tray_total", lambda win, n, uncertain=False, **kw: _tray_calls.append(kw))
     _tray_calls = []
     for line in ("@@CHECK@@|system|7|system package(s)|at-least",
                  "@@CHECK@@|flatpak|0|Flatpak app(s)",
@@ -2271,6 +2271,11 @@ def main() -> int:
     check("ONEUP-0259 INV-13 every state the model accepts, plus unchanged, has a word",
           set(steps.STATE_WORDS) == {*packages.STATES, "unchanged"} and all(_words))
     check("ONEUP-0259 INV-13 no two states share a word", len(set(_words)) == len(_words))
+    # 06-5 (readability 2026-11-15): every reader takes these with .get(), so a step
+    # added to TASKS alone gets no short title and no in-progress words, silently.
+    _task_keys = [key for key, _t, _d in steps.TASKS]
+    check("06-5: every step in TASKS has a short title and in-progress words",
+          list(steps.SHORT_TITLES) == _task_keys and list(steps.IN_PROGRESS) == _task_keys)
     # ONEUP-0259 INV-13's "the redrawn list shows the table's word" moved to
     # ONEUP-0239 INV-3, which reads every layout's views (ONEUP-0239 §7).
     _calls = []
@@ -3040,7 +3045,7 @@ def main() -> int:
     # so a Flatpak-only retry with every switch on cleared "5 updates waiting".
     wT = window.Updater()
     wT.proc = QProcess(wT)
-    tray._apply_tray_total(wT, 5)
+    tray.apply_tray_total(wT, 5)
     run._reset_for_run(wT, ["flatpak"], check=False)
     for line in ("@@STEP_BEGIN@@|flatpak|1|1", "@@STEP_END@@|flatpak|ok|up-to-date",
                  "@@DONE@@|ok"):
@@ -3060,7 +3065,7 @@ def main() -> int:
           "All done" not in wN.status.text() and "did not start" in wN.status.text())
     # A tooltip rebuilt when the tray comes back kept the count and dropped the doubt.
     wU = window.Updater()
-    tray._apply_tray_total(wU, 0, uncertain=True)
+    tray.apply_tray_total(wU, 0, uncertain=True)
     wU._tray_available = True
     tray._ensure_tray(wU)
     check("ONEUP-0400 a rebuilt tray tooltip keeps 'could not check every source'",
@@ -3168,6 +3173,21 @@ def main() -> int:
         paths._reset_engine_cache()
         paths.engine_argv()
         check("a second resolve reuses the copy", sorted(_copies_dir.iterdir()) == _copies)
+        # 08-L1 (readability 2026-11-15): every engine_available call resolves the
+        # engine, and hashing the whole source each time read it all on the window's
+        # thread. One process hashes it once.
+        _hashes, _real_sha = [], paths.hashlib.sha256
+        paths.hashlib.sha256 = lambda *a: _hashes.append(1) or _real_sha(*a)
+        try:
+            for _ in range(3):
+                paths.engine_available()
+        finally:
+            paths.hashlib.sha256 = _real_sha
+        check("08-L1: a resolved engine copy is not hashed again", _hashes == [])
+        shutil.rmtree(_copies[0])
+        paths.engine_argv()
+        check("08-L1: and a copy deleted since is made again",
+              (_copies[0] / "oneup" / "engine" / "__main__.py").is_file())
         os.environ["LD_LIBRARY_PATH_ORIG"] = "/orig/lib"
         check("an original LD_LIBRARY_PATH is restored instead",
               paths.engine_argv()[:2] == ["env", "LD_LIBRARY_PATH=/orig/lib"])
@@ -3222,6 +3242,7 @@ def main() -> int:
                     os.environ[_v] = _val
         with (_src / "engine" / "markers.py").open("a") as _fh:
             _fh.write("\n# one more byte\n")
+        paths._reset_engine_cache()     # a new bundle is a new process
         paths.engine_argv()
         check("an edited source gets a copy of its own", len(list(_copies_dir.iterdir())) == 2)
         paths.shutil.which = lambda _name: None
@@ -3722,7 +3743,7 @@ def main() -> int:
     # (a) enabling with passwordless OFF and cancelling the combined dialog installs nothing
     w = window.Updater()
     installed_a = []
-    _patch(autostart, "_install_user_timer", lambda *a, **k: (installed_a.append(a) or True))
+    _patch(autostart, "install_user_timer", lambda *a, **k: (installed_a.append(a) or True))
     _patch(auth, "_confirm_passwordless", lambda win, lead="": False)   # user cancels
     auth._set_auth_checked(w, False)                               # passwordless off
     autostart.on_autoupdate_toggled(w, True)
@@ -3734,7 +3755,7 @@ def main() -> int:
     # (b) a settle reporting passwordless OFF while a latch is pending must NOT install
     w = window.Updater()
     installed_b = []
-    _patch(autostart, "_install_user_timer", lambda *a, **k: (installed_b.append(a) or True))
+    _patch(autostart, "install_user_timer", lambda *a, **k: (installed_b.append(a) or True))
     w._pending_autoupdate = True
     auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|off\n"))
     check("settle passwordless-off does not install the update timer (stale-switch guard)",
@@ -3745,7 +3766,7 @@ def main() -> int:
     # (c) a settle reporting passwordless ON with a pending latch installs + turns on
     w = window.Updater()
     installed_c = []
-    _patch(autostart, "_install_user_timer", lambda *a, **k: (installed_c.append(a) or True))
+    _patch(autostart, "install_user_timer", lambda *a, **k: (installed_c.append(a) or True))
     w._pending_autoupdate = True
     auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|on\n"))
     check("settle passwordless-on installs the update timer", bool(installed_c))
@@ -3763,10 +3784,10 @@ def main() -> int:
     w = window.Updater()
     removed_d = []
     _patch(auth, "_stand_down_autoupdate", _real_stand_down)   # neutralised suite-wide
-    _patch(autostart, "_autoupdate_may_be_enabled", lambda: True)
-    _patch(autostart, "_remove_user_timer", lambda name: removed_d.append(name) or True)
+    _patch(autostart, "autoupdate_may_be_enabled", lambda: True)
+    _patch(autostart, "remove_user_timer", lambda name: removed_d.append(name) or True)
     _patch(auth, "_run_auth", lambda *a, **k: None)          # don't spawn a real process
-    autostart._set_autoupdate_checked(w, True)
+    autostart.set_autoupdate_checked(w, True)
     auth.on_auth_toggled(w, False)                                 # user revokes
     check("revoke passwordless removes the update timer", "oneup-update" in removed_d)
     check("revoke passwordless clears the auto-update toggle", not w.autoupdate_btn.isChecked())
@@ -3781,9 +3802,9 @@ def main() -> int:
     w = window.Updater()
     removed_e = []
     _patch(auth, "_stand_down_autoupdate", _real_stand_down)
-    _patch(autostart, "_autoupdate_may_be_enabled", lambda: True)
-    _patch(autostart, "_remove_user_timer", lambda name: removed_e.append(name) or True)
-    autostart._set_autoupdate_checked(w, True)
+    _patch(autostart, "autoupdate_may_be_enabled", lambda: True)
+    _patch(autostart, "remove_user_timer", lambda name: removed_e.append(name) or True)
+    autostart.set_autoupdate_checked(w, True)
     auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|off\n"))
     check("a discovered passwordless-off removes the update timer", "oneup-update" in removed_e)
     check("a discovered passwordless-off clears the auto-update toggle",
@@ -3791,7 +3812,7 @@ def main() -> int:
     _unpatch_all()
 
     # (f) INV-12: a failed ENABLE must not answer with "we turned it off". Two halves, and
-    # the second is the one a false-only fixture misses: _autoupdate_may_be_enabled shells out to
+    # the second is the one a false-only fixture misses: autoupdate_may_be_enabled shells out to
     # systemctl, so it reports the MACHINE, and a timer enabled outside OneUp would make it
     # true while the user's own enable is still in flight.
     for label, enabled in (("no timer present", False),
@@ -3799,8 +3820,8 @@ def main() -> int:
         w = window.Updater()
         removed_f = []
         _patch(auth, "_stand_down_autoupdate", _real_stand_down)
-        _patch(autostart, "_autoupdate_may_be_enabled", lambda e=enabled: e)
-        _patch(autostart, "_remove_user_timer",
+        _patch(autostart, "autoupdate_may_be_enabled", lambda e=enabled: e)
+        _patch(autostart, "remove_user_timer",
                lambda name, acc=removed_f: acc.append(name) or True)
         w._pending_autoupdate = True
         auth._on_auth_status_finished(w, _StubProc("@@AUTH@@|off\n"))
@@ -3814,8 +3835,8 @@ def main() -> int:
     w = window.Updater()
     removed_g = []
     _patch(auth, "_stand_down_autoupdate", _real_stand_down)
-    _patch(autostart, "_autoupdate_may_be_enabled", lambda: True)
-    _patch(autostart, "_remove_user_timer", lambda name: removed_g.append(name) or True)
+    _patch(autostart, "autoupdate_may_be_enabled", lambda: True)
+    _patch(autostart, "remove_user_timer", lambda name: removed_g.append(name) or True)
     auth._on_auth_status_finished(w, _StubProc(""))
     check("a probe that emitted nothing removes no timer", not removed_g)
     check("a probe that emitted nothing still reflects passwordless as off",
@@ -3835,7 +3856,7 @@ def main() -> int:
     _patch(autostart, "_systemctl_user", lambda *a: None)          # every call times out
     _patch(QMessageBox, "warning", staticmethod(lambda *a, **k: warned_g2.append(a[1]) or 0))
     _patch(QMessageBox, "information", staticmethod(lambda *a, **k: 0))
-    autostart._set_autoupdate_checked(w, True)
+    autostart.set_autoupdate_checked(w, True)
     auth._stand_down_autoupdate(w)
     check("a timed-out timer check still leads to a removal attempt (ONEUP-0403)",
           warned_g2 == ["Could not turn off automatic updates"])
@@ -3846,9 +3867,9 @@ def main() -> int:
     # The same over the user's own click: switching off a timer that will not go off.
     w = window.Updater()
     warned_g3 = []
-    _patch(autostart, "_remove_user_timer", lambda name: False)
+    _patch(autostart, "remove_user_timer", lambda name: False)
     _patch(QMessageBox, "warning", staticmethod(lambda *a, **k: warned_g3.append(a[1]) or 0))
-    autostart._set_autoupdate_checked(w, True)
+    autostart.set_autoupdate_checked(w, True)
     autostart.on_autoupdate_toggled(w, False)
     check("switching off a timer that stays on keeps the switch on (ONEUP-0403)",
           w.autoupdate_btn.isChecked() and warned_g3 == ["Could not turn off automatic updates"])
@@ -3864,7 +3885,7 @@ def main() -> int:
     if getattr(w, "_authstat_proc", None) is not None:
         w._authstat_proc.waitForFinished(5000)       # settle the real startup probe first
     installed_h = []
-    _patch(autostart, "_install_user_timer", lambda *a, **k: (installed_h.append(a) or True))
+    _patch(autostart, "install_user_timer", lambda *a, **k: (installed_h.append(a) or True))
 
     class _Running:
         def state(self): return QProcess.Running
@@ -3889,7 +3910,7 @@ def main() -> int:
     if getattr(w, "_authstat_proc", None) is not None:
         w._authstat_proc.waitForFinished(5000)
     installed_h2, grants_h2 = [], []
-    _patch(autostart, "_install_user_timer", lambda *a, **k: (installed_h2.append(a) or True))
+    _patch(autostart, "install_user_timer", lambda *a, **k: (installed_h2.append(a) or True))
 
     def _consent_h2(win, lead=""):
         auth._on_auth_status_finished(win, _StubProc("@@AUTH@@|off\n"))  # lands mid-box
@@ -3942,7 +3963,7 @@ def main() -> int:
     _patch(auth, "_stand_down_autoupdate", _real_stand_down)
     _patch(autostart, "_systemctl_user", lambda *a: None)
     _patch(QMessageBox, "warning", staticmethod(lambda *a, **k: warned_h4.append(a[1]) or 0))
-    autostart._set_autoupdate_checked(w, False)
+    autostart.set_autoupdate_checked(w, False)
     auth._stand_down_autoupdate(w)
     check("08-M2: no answer and no timer file leaves the switch off, with no warning",
           not w.autoupdate_btn.isChecked() and not warned_h4)
@@ -4010,7 +4031,7 @@ def main() -> int:
     _asked, _consent, _installed_i = [], [], []
     _patch(auth, "_query_auth_status", lambda win: _asked.append(1))
     _patch(auth, "_confirm_passwordless", lambda win, lead="": _consent.append(1) or False)
-    _patch(autostart, "_install_user_timer", lambda *a, **k: (_installed_i.append(a) or True))
+    _patch(autostart, "install_user_timer", lambda *a, **k: (_installed_i.append(a) or True))
     auth._set_auth_checked(wS, False)
     autostart.on_autoupdate_toggled(wS, True)
     check("ONEUP-0249 enabling automatic updates asks polkit, never offers a grant",
@@ -4426,15 +4447,15 @@ def main() -> int:
           and markers.hint_command(["zzz-new-hint"]) == ""
           and markers.hint_command(["repo-key-expired", "extra"]) == "")
     w = window.Updater()
-    banners._show_warning(w, "Something failed — run it, then retry.", "sudo zypper refresh")
+    banners.show_warning(w, "Something failed — run it, then retry.", "sudo zypper refresh")
     check("copy button appears when a hint carries a command",
           w.warn_copy_btn.isVisibleTo(w.warn_banner)
           and w._hint_command == "sudo zypper refresh")
-    banners._show_warning(w, "Low disk space — free some room and retry.")
+    banners.show_warning(w, "Low disk space — free some room and retry.")
     check("copy button hidden when a hint carries no command",
           not w.warn_copy_btn.isVisibleTo(w.warn_banner))
     try:
-        banners._show_warning(w, "Retry.", "sudo zypper refresh")
+        banners.show_warning(w, "Retry.", "sudo zypper refresh")
         banners._copy_hint_command(w)   # must not throw under offscreen Qt
         check("copy command runs without error", True)
     except Exception as exc:  # noqa: BLE001
@@ -5072,14 +5093,14 @@ def main() -> int:
     # (12) on_finished refreshes the tray: a successful run -> neutral; a check -> the count.
     w = window.Updater()
     applied = []
-    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False, **_: applied.append(n))
+    _patch(tray, "apply_tray_total", lambda win, n, uncertain=False, **_: applied.append(n))
     w.proc = QProcess(w)
     w._installed_count = "2"
     run.on_finished(w, 0, QProcess.ExitStatus.NormalExit)     # a run
     check("successful run sets the tray neutral", applied and applied[-1] == 0)
     w = window.Updater()
     applied2 = []
-    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False, **_: applied2.append(n))
+    _patch(tray, "apply_tray_total", lambda win, n, uncertain=False, **_: applied2.append(n))
     w._check_mode = True
     w._installed_count = "5"
     w.proc = QProcess(w)
@@ -5092,7 +5113,7 @@ def main() -> int:
     for _mode in (False, True):
         w = window.Updater()
         applied3 = []
-        _patch(tray, "_apply_tray_total",
+        _patch(tray, "apply_tray_total",
                lambda win, n, uncertain=False, a=applied3, **_: a.append(n))
         w.rows["flatpak"].switch.setChecked(False)
         w._check_mode = _mode
@@ -5109,7 +5130,7 @@ def main() -> int:
     # That exact false all-clear shipped: the window said it while 8 updates waited,
     # because the sources holding them had been silently skipped.
     w = window.Updater()
-    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False, **_: None)
+    _patch(tray, "apply_tray_total", lambda win, n, uncertain=False, **_: None)
     w._check_mode = True
     w._installed_count = "0"
     w._unchecked = ["OneUp couldn't read these software sources: packman"]
@@ -5122,7 +5143,7 @@ def main() -> int:
           w.warn_banner.isVisibleTo(w) and "packman" in w.warn_label.text())
     # A clean check still gets its cheerful summary — the fix must not cry wolf.
     w = window.Updater()
-    _patch(tray, "_apply_tray_total", lambda win, n, uncertain=False, **_: None)
+    _patch(tray, "apply_tray_total", lambda win, n, uncertain=False, **_: None)
     w._check_mode = True
     w._installed_count = "0"
     w.proc = QProcess(w)
@@ -5134,7 +5155,7 @@ def main() -> int:
     # to date. 🎉" and zeroed the tray, and dropped the hint saying why.
     w = window.Updater()
     _tray_set = []
-    _patch(tray, "_apply_tray_total", lambda win, n, **_: _tray_set.append(n))
+    _patch(tray, "apply_tray_total", lambda win, n, **_: _tray_set.append(n))
     w._check_mode = True
     w._installed_count = ""
     w._hints = ["Another OneUp run is already going."]
@@ -5308,7 +5329,7 @@ def main() -> int:
         QProcess.start = _orig_qp_start
 
     # --- Diagnostics bundle for a bug report (ONEUP-0031) ------------------
-    _latest, _build = diagnostics._latest_run_log, diagnostics.build_diagnostics
+    _latest, _build = diagnostics.latest_run_log, diagnostics.build_diagnostics
     with tempfile.TemporaryDirectory() as _ld:
         _ldp = Path(_ld)
         for _n, _age in (("2026-07-24_100000.log", 300),       # older real run
@@ -5332,14 +5353,19 @@ def main() -> int:
     check("diagnostics: hostname scrubbed", "boxname" not in _rep and "<host>" in _rep)
     # ONEUP-0401: the report is for public paste. sudo names the user bare, outside any
     # home path, and a repository URL can carry a login.
+    _rep_u = _build("1", "x", [], "r.log",
+                    "sudo: ants is not allowed to run sudo\nants: pants fit\n"
+                    "baseurl=https://bob:s3cret@repo.example/oss/ and ftp://carol@m.example/\n",
+                    "w", "/home/ants", "", user="ants")
+    # 08-L2 (readability 2026-11-15): the builder read the login itself, so whoever
+    # ran the suite had their name scrubbed out of the test's own text.
     import getpass as _gp
     _orig_user = _gp.getuser
-    _gp.getuser = lambda: "ants"
+    _gp.getuser = lambda: "openSUSE"
     try:
-        _rep_u = _build("1", "x", [], "r.log",
-                        "sudo: ants is not allowed to run sudo\nants: pants fit\n"
-                        "baseurl=https://bob:s3cret@repo.example/oss/ and ftp://carol@m.example/\n",
-                        "w", "/home/ants", "")
+        check("08-L2: the bundle scrubs only the login it is given",
+              "openSUSE: openSUSE Tumbleweed" in _build(
+                  "1", "openSUSE Tumbleweed", [], "r.log", "ok", "w", "", ""))
     finally:
         _gp.getuser = _orig_user
     check("ONEUP-0401 diagnostics: the user name is scrubbed where it stands alone",
@@ -5452,7 +5478,7 @@ def main() -> int:
         (_ldp / "2026-07-24_120000.log").write_text("x")
         (_ldp / "2026-07-24_130000.log").symlink_to(_ldp / "gone")   # stat() raises
         try:
-            _got = diagnostics._latest_run_log(_ldp)
+            _got = diagnostics.latest_run_log(_ldp)
         except OSError:
             _got = "raised"
         check("ONEUP-0184: a log that vanished mid-call is skipped",
@@ -5518,11 +5544,17 @@ def main() -> int:
         _blocker.unlink(missing_ok=True)
 
     wD = window.Updater()
-    diagnostics.copy_diagnostics(wD)
+    _real_user_name, diagnostics._user_name = diagnostics._user_name, lambda: "OneUp"
+    try:
+        diagnostics.copy_diagnostics(wD)
+    finally:
+        diagnostics._user_name = _real_user_name
     check("diagnostics: button flips to Copied after a copy",
           wD.diag_btn.text() == "Copied ✓")
     check("diagnostics: clipboard receives the bundle",
-          "OneUp diagnostics" in QApplication.clipboard().text())
+          "<user> diagnostics" in QApplication.clipboard().text())
+    check("08-L2: and the button's copy scrubs the login it reads",
+          "OneUp diagnostics" not in QApplication.clipboard().text())
 
     # --- ONEUP-0030: "last updated N days ago" nudge on the dashboard --------
     # refresh_last_run() derives a relative day-count from history.json and ambers
@@ -7954,7 +7986,7 @@ for th in theme.THEMES:
                  "@@STEP_BEGIN@@|system|1|2", "@@PROGRESS@@|system|1|2|download",
                  "@@PKG@@|system|downloading|alpha|2"):
         run.handle_line(w6, line)
-    banners._show_warning(w6, "A warning that must survive a layout change.")
+    banners.show_warning(w6, "A warning that must survive a layout change.")
     w6._show_log(True)
     QApplication.processEvents()
 
@@ -8845,7 +8877,7 @@ for th in theme.THEMES:
                > _head.mapTo(wS, _head.rect().center()).x()) != rtlS)
     _boxes = hS.panel.findChildren(QFrame, "FigureBox")
     _fig = [[lb.text() for lb in b.findChildren(QLabel)] for b in _boxes]
-    _one, _three = markers._format_size(1048576), markers._format_size(3145728)
+    _one, _three = markers.format_size(1048576), markers.format_size(3145728)
     check(f"ONEUP-0316 three figure boxes: packages, downloaded, time left ({_fig})",
           _fig == [["Packages", "1 of 4"], ["Downloaded", f"{_one} of {_three}"],
                    ["Time left", "not known"]])
@@ -8944,8 +8976,8 @@ for th in theme.THEMES:
           and "Fetching games" in _refresh)
     _got, _total = 6501171, 18350080
     run.handle_line(wF, f"@@PROGRESS@@|system|4|24|download|{_got}|{_total}")
-    _line = (f"System packages · Downloading 4 of 24 · {markers._format_size(_got)} of "
-             f"{markers._format_size(_total)}")
+    _line = (f"System packages · Downloading 4 of 24 · {markers.format_size(_got)} of "
+             f"{markers.format_size(_total)}")
     check(f"ONEUP-0317 the status is one line: step, phase and count, bytes "
           f"({wF.status.text()!r})", wF.status.text() == _line)
     wF._dl_at -= 10

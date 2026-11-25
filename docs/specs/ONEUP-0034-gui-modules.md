@@ -118,11 +118,11 @@ owns the subsystem it serves, and what stays in `window.py` is what the window i
 | `oneup/gui/steps.py` | `TASKS` | the five update steps, their keys, titles and order |
 | `oneup/gui/theme.py` | `_QSS`, `_HC_QSS`, the eight palettes, `_HC_DARK`, `_HC_LIGHT`, `THEMES`, `REFERENCE_KEYS`, `TEXT_SCALES`, `_FONT_SCALE`, `_font_metrics`, `derived_keys`, `current_palette`, `build_theme`, `apply_app_theme`, `current_is_dark` | what the app looks like |
 | `oneup/gui/placement.py` | `_on_wayland`, `run_kwin_script`, `center_on_parent` | putting a window where the user expects to find it |
-| `oneup/gui/markers.py` | splitting a marker line into its name and fields; `_step_badge`, `_format_duration`, `_format_size` | reading what the engine said, and saying it in English |
-| `oneup/gui/diagnostics.py` | `_os_release_pretty`, `_latest_run_log`, `build_diagnostics`, `cache_bytes`, `DIAG_LOG_CAP` | describing this machine when the user reports a problem |
+| `oneup/gui/markers.py` | splitting a marker line into its name and fields; `step_badge`, `format_duration`, `format_size` | reading what the engine said, and saying it in English |
+| `oneup/gui/diagnostics.py` | `_os_release_pretty`, `latest_run_log`, `build_diagnostics`, `cache_bytes`, `DIAG_LOG_CAP` | describing this machine when the user reports a problem |
 | `oneup/gui/toggle_switch.py` | `ToggleSwitch` | the phone-style on/off switch |
 | `oneup/gui/task_row.py` | `TaskRow` | one task's row: its switch, badge, timing and details |
-| `oneup/gui/repos.py` | `_ALIAS_RE`, `_parse_repos`, `_repo_purpose`, `read_repos`, `RepoManagerDialog` | reading and editing the machine's software sources |
+| `oneup/gui/repos.py` | `ALIAS_RE`, `_parse_repos`, `_repo_purpose`, `read_repos`, `RepoManagerDialog` | reading and editing the machine's software sources |
 | `oneup/gui/rollback.py` | `RollbackDialog`, snapshot thinning and the rollback call behind it | going back to a snapshot |
 | `oneup/gui/autostart.py` | the autostart desktop file, both systemd user timers, `_headless_command` | running OneUp without being asked to |
 | `oneup/gui/tray.py` | the tray icon, its background check, the single-instance socket, `TRAY_*` | living in the system tray |
@@ -467,7 +467,7 @@ keep. `theme.py` already owns what the app looks like and imports no window.
 
 **Five names §4.2 left unplaced, and where they went.** `card_inside` → `theme.py`, since it
 exists only because of how the sheet paints `#RowBorder`. `_SESSION_CRITICAL`,
-`_USER_MANAGER_RE` and `_split_session_critical` → `banners.py`, beside `restart_services`,
+`_USER_MANAGER_RE` and `split_session_critical` → `banners.py`, beside `restart_services`,
 because INV-11 forbids separating a guard from the command it protects.
 `SINGLE_INSTANCE_TIMEOUT_MS` and `single_instance_name` → `tray.py`, with the socket.
 `_update_check_error` → `app_update.py`, with the reply it explains.

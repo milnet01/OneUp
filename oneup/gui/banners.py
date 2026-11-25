@@ -1,7 +1,7 @@
 """Telling the user what went wrong, and offering the one thing that fixes it.
 
 The reboot, info and warning banners, and the remedy actions their buttons run.
-`_split_session_critical` and `restart_services` stay in one module because a
+`split_session_critical` and `restart_services` stay in one module because a
 guard and the command it protects must not be separated
 (`docs/standards/security.md` §9.4, spec INV-11); the same is true of
 `_service_units` and its callers here. `run.py` calls it too, to decide which
@@ -46,7 +46,7 @@ _SESSION_CRITICAL = frozenset({
 # `user@1000` and friends — the user's own systemd session, which contains this window.
 _USER_MANAGER_RE = re.compile(r"user@\d+")
 
-def _split_session_critical(svcs: list[str]) -> tuple[list[str], list[str]]:
+def split_session_critical(svcs: list[str]) -> tuple[list[str], list[str]]:
     """Split validated unit names into (safe to restart, would end the session).
 
     The display manager is RESOLVED rather than guessed: `/etc/systemd/system/
@@ -105,7 +105,7 @@ def _make_banner(win, frame_obj: str, btn_obj: str, btn_text: str, slot,
     lbl.setTextFormat(Qt.TextFormat.PlainText)  # repository names and URLs reach it (ONEUP-0183)
     lbl.setWordWrap(True)
     # The FRAME carries the name; the label carries it as a DESCRIPTION. An explicit
-    # name on a QLabel is permanent and this label is the `source` `_show_warning`
+    # name on a QLabel is permanent and this label is the `source` `show_warning`
     # announces on, so naming it makes the reader say "Warning" instead of the
     # warning. Same rule ONEUP-0028 states for the status label.
     if name:
@@ -167,7 +167,7 @@ class MessageStrip(QScrollArea):
         self.setFixedHeight(fm.lineSpacing() * 3 + m.top() + m.bottom() + frame + 2)
 
 
-def _show_warning(win, text: str, command: str = "", role: str = ""):
+def show_warning(win, text: str, command: str = "", role: str = ""):
     """Show the warning banner with `text`, exposing a Copy button when the hint
     it shows names a `command` — passed as data (`markers.hint_command`), never
     found by an English cue in a sentence a translation rewords (ONEUP-0235).
@@ -266,7 +266,7 @@ def _fix_keys_and_retry(win):
     run._launch(win, steps, check=False, import_keys=True)
 
 
-def _repo_display_name(alias: str) -> str:
+def repo_display_name(alias: str) -> str:
     """Resolve a repo alias to its human-readable name for the banner text;
     fall back to the raw alias if it can't be found (repo removed, zypper
     unavailable, …)."""
@@ -367,7 +367,7 @@ def restart_services(win):
     if not svcs:
         return
     # Never restart a service that would end the session (ONEUP-0111).
-    safe, critical = _split_session_critical(svcs)
+    safe, critical = split_session_critical(svcs)
     # Nor one that is not running (ONEUP-0427): `_running` says why. Each name is a
     # .service unit, written out: the name check also accepts "reboot.target", and
     # `systemctl restart reboot.target` reboots the machine (ONEUP-0401).

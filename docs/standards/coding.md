@@ -77,7 +77,7 @@ def latest(log: Path) -> Path | None:      # X | Y unions (3.10+), not Optional[
 steps: list[str] = []                      # builtin generics (3.9+), not List[str]
 ```
 
-The codebase already does this — `_latest_run_log` is annotated `-> Path | None`. Do not add
+The codebase already does this — `latest_run_log` is annotated `-> Path | None`. Do not add
 `from typing import Optional, List`; they are not needed and their presence in a new
 module is a review comment.
 

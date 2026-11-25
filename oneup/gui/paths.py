@@ -1,7 +1,8 @@
-"""Where everything OneUp reads or writes lives.
+"""Where OneUp's own files live, and how to start its engine.
 
-**The one module in the package allowed to know where things are.** Every other
-module imports from here; none builds a path from its own `__file__`. A module
+**No other module builds a path from its own `__file__`; each imports the
+location from here.** (The machine's own folders — `~/.config/autostart`,
+`/etc/os-release` — are named where they are used.) A module
 under `oneup/gui/` that computes the parent of its own file gets `oneup/gui/`,
 so the engine would be looked for in the wrong directory and never found — the
 window opens and Run fails (`docs/standards/files-and-naming.md` §4.2).
@@ -25,6 +26,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 
 # Where our bundled files (the engine, the icon) live. Normally the repo root;
@@ -119,6 +121,17 @@ def log_dir_ready(win=None, quiet: bool = False) -> bool:
         return False
 
 
+def new_log(kind: str = "") -> Path:
+    """A fresh log's path in `STATE_LOG_DIR`, named for the time now.
+
+    `kind` is the middle of the name — `auth`, `check`, `thin` — and "" names an
+    update run's log, `<stamp>.log`. The difference matters: `diagnostics.latest_run_log`
+    takes a one-dot name for an update run, so a probe that left out its kind would be
+    attached to a bug report as the latest run, and kept by pruning as one."""
+    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    return STATE_LOG_DIR / (f"{stamp}.{kind}.log" if kind else f"{stamp}.log")
+
+
 # How long OneUp keeps its own logs, in days — the choices Settings offers, in the
 # order its button cycles through them (ONEUP-0082). A stored value not on the list
 # means the default, so a hand-edited config can never leave the button showing one
@@ -161,7 +174,7 @@ def _prune_by_setting() -> None:
     imported here, not at the top, so this module stays importable with no Qt."""
     from PySide6.QtCore import QSettings
 
-    from .diagnostics import _latest_run_log
+    from .diagnostics import latest_run_log
     keep = set()
     try:
         lines = RUN_STATE.read_text().splitlines()
@@ -169,7 +182,7 @@ def _prune_by_setting() -> None:
             keep.add(Path(lines[1]))
     except (OSError, ValueError):   # unreadable or garbled: keep by age alone
         pass
-    newest = _latest_run_log(STATE_LOG_DIR)
+    newest = latest_run_log(STATE_LOG_DIR)
     if newest is not None:
         keep.add(newest)
     prune_logs(log_keep_days(QSettings("OneUp", "OneUp").value("log_keep_days")), keep)
@@ -223,9 +236,10 @@ def clear_run_state(pid: int) -> None:
 # the AppImage asks, because only there is the interpreter the machine's own.
 PYTHON_FLOOR = (3, 13)
 
-# What the resolver learned once per process: the machine's python3 (AppImage only)
-# and whether the "not found" line has gone to stderr. One dict, so the suite can
-# clear it before each case — a cached answer would otherwise leak between them.
+# What the resolver learned once per process: the machine's python3 and the engine's
+# copy (AppImage only), and whether the "not found" line has gone to stderr. One dict,
+# so the suite can clear it before each case — a cached answer would otherwise leak
+# between them.
 _engine_cache: dict = {}
 
 
@@ -233,13 +247,21 @@ def _reset_engine_cache() -> None:
     _engine_cache.clear()
 
 
+def _machine_library_path() -> str | None:
+    """The `LD_LIBRARY_PATH` a program OneUp starts should have, or None for none.
+
+    A PyInstaller one-file bundle points `LD_LIBRARY_PATH` at its own `_MEI…`
+    directory, and every child inherits that (measured 2026-10-02). The bootloader
+    keeps the original in `LD_LIBRARY_PATH_ORIG` when there was one; with none, the
+    variable must go. The three callers below apply this one rule."""
+    return os.environ.get("LD_LIBRARY_PATH_ORIG")
+
+
 def _library_path_env() -> list[str]:
-    """`env` arguments undoing what a PyInstaller one-file bundle does to
-    `LD_LIBRARY_PATH`: it points it at its own `_MEI…` directory, and every child
-    inherits that (measured 2026-10-02). The machine's python3 must load the
-    machine's libraries — the bundle's go when the window exits, mid-run.
-    The bootloader keeps the original in `LD_LIBRARY_PATH_ORIG` when there was one."""
-    orig = os.environ.get("LD_LIBRARY_PATH_ORIG")
+    """`env` arguments giving the engine the machine's libraries. The machine's
+    python3 must load the machine's libraries — the bundle's go when the window
+    exits, mid-run."""
+    orig = _machine_library_path()
     return [f"LD_LIBRARY_PATH={orig}"] if orig is not None else ["-u", "LD_LIBRARY_PATH"]
 
 
@@ -250,10 +272,10 @@ def restore_machine_library_path() -> None:
     starts: `kde-open` then loads the bundle's older Qt, fails on a missing
     `Qt_6.12` symbol and opens nothing, so "View release" and "Open log file" did
     nothing (measured 2026-11-07). OneUp's own process is unaffected: the loader
-    reads `LD_LIBRARY_PATH` once, at start-up. Same mapping as `_library_path_env`."""
+    reads `LD_LIBRARY_PATH` once, at start-up."""
     if not getattr(sys, "frozen", False):
         return
-    orig = os.environ.get("LD_LIBRARY_PATH_ORIG")
+    orig = _machine_library_path()
     if orig is None:
         os.environ.pop("LD_LIBRARY_PATH", None)
     else:
@@ -296,8 +318,8 @@ def _machine_python() -> str | None:
         found, ok = shutil.which("python3"), False
         if found:
             env = {k: v for k, v in os.environ.items() if k != "LD_LIBRARY_PATH"}
-            if "LD_LIBRARY_PATH_ORIG" in os.environ:
-                env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH_ORIG"]
+            if (orig := _machine_library_path()) is not None:
+                env["LD_LIBRARY_PATH"] = orig
             probe = f"import sys; sys.exit(sys.version_info < {PYTHON_FLOOR!r})"
             try:
                 ok = subprocess.run([found, "-c", probe], env=env,  # noqa: S603
@@ -316,7 +338,21 @@ def _engine_copy() -> Path | None:
     directory named for its own content and run from there. Written whole into a
     temporary sibling and renamed into place, so a half-written copy is never
     launched. Older copies are left alone: nothing records which one a live engine
-    is using, so no deletion can be shown safe."""
+    is using, so no deletion can be shown safe.
+
+    Worked out once per process: the bundle cannot change under a running window,
+    and every `engine_available` call resolves the engine, so hashing each time read
+    every source file on the window's thread again. A copy deleted since is made
+    again."""
+    cached = _engine_cache.get("copy")
+    if cached is not None and (cached / "oneup" / "engine" / "__main__.py").is_file():
+        return cached
+    _engine_cache["copy"] = copy = _copy_engine_source()
+    return copy
+
+
+def _copy_engine_source() -> Path | None:
+    """`_engine_copy`'s work: hash the bundle's engine source and copy it out."""
     src = HERE / "engine-src"
     files = sorted(p for p in src.rglob("*.py") if "__pycache__" not in p.parts) \
         if src.is_dir() else []
@@ -349,9 +385,8 @@ def _engine_copy() -> Path | None:
 def _resolve_engine() -> tuple[list[str] | None, list[str]]:
     """The argv prefix that launches the engine, or None — plus what was tried.
 
-    Replaces `_find_engine`, which returned its first candidate whether or not it
-    existed, so each caller decided what a missing engine looked like
-    (`docs/standards/files-and-naming.md` §7 Trap 4). This reports what it tried,
+    A missing engine is decided here, not by each caller
+    (`docs/standards/files-and-naming.md` §7 Trap 4): this reports what it tried,
     and says so on stderr once per process, so a guard that returns silently still
     leaves a trace (ONEUP-0054 §4.7: "so no caller has to")."""
     if getattr(sys, "frozen", False):

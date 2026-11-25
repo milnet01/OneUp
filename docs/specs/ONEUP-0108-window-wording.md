@@ -6,7 +6,7 @@
 **Branch:** v2
 **Verified at:** `1432888` — every symbol named below was re-read out of `updater.py` and
 `update_system.sh` on 2026-08-12, not carried forward from the parent document's stamp. A
-split is not a licence to inherit a verification: `_step_badge`, `handle_marker`,
+split is not a licence to inherit a verification: `step_badge`, `handle_marker`,
 `_parse_tray_line`, `_on_auth_finished`, `_on_thin_finished`, `_on_size_output` and `TASKS`
 are all in `updater.py`, `reboot_reason_from_log` is in `update_system.sh`, and the three
 side-channel `line.split("|", 1)[1]` reads were each opened and checked against what §4.5
@@ -55,7 +55,7 @@ produce something a person can read and act on.
 ## 2. Background
 
 **The evidence that the window already re-words the engine's English is ONEUP-0072 §2.1**,
-and it is not restated here. What it leaves this document is the consequence: `_step_badge`
+and it is not restated here. What it leaves this document is the consequence: `step_badge`
 recovers a badge by testing the engine's sentence for `"up to date"`, `"already"`,
 `"nothing"`, `"remov"`, `"applied"`, `"updated"`, `"update"` and `"not installed"`, and
 pulls the number back out with `re.search(r"\d+", detail)`. Those substrings *are* the
@@ -113,7 +113,7 @@ by number.
 
 The tables live in `oneup/gui/markers.py` — `docs/specs/ONEUP-0034-gui-modules.md` §4.2
 already gives that module *"reading what the engine said, and saying it in English"*, and
-ONEUP-0034 lands `_step_badge` there — it is in `updater.py` today — so this replaces its
+ONEUP-0034 lands `step_badge` there — it is in `updater.py` today — so this replaces its
 substring matching with a lookup rather than adding a layer beside it. One table per marker
 family the window renders as wording: four of the five ONEUP-0072 §4.1 converts,
 `@@REMEDY@@` having none, because the window renders no part of its payload and the branch
@@ -251,7 +251,7 @@ sentence in a slot with no room for one.
 **An empty code field names nothing, so the badge says the result is unknown.** One sender
 produces it: the frozen Bash fallback's `end_step cache ok`, which emits
 `@@STEP_END@@|cache|ok|` (ONEUP-0072 §6). A bare empty code would be a blank badge, so
-`markers._step_badge` shows *Result unknown* instead — the badge it already shows for a
+`markers.step_badge` shows *Result unknown* instead — the badge it already shows for a
 status it cannot read (ONEUP-0117).
 
 Zero names on a list-bearing `@@CHECK_UNKNOWN@@` code is the one case that should never

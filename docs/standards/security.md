@@ -136,7 +136,7 @@ update run:
 
 | Site | Command | Guard |
 | --- | --- | --- |
-| `RepoManagerDialog._build_apply_command` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must pass `_alias_ok` — match `_ALIAS_RE` and not be all digits — else the whole command is `None` and nothing runs |
+| `RepoManagerDialog._build_apply_command` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must pass `_alias_ok` — match `ALIAS_RE` and not be all digits — else the whole command is `None` and nothing runs |
 | `banners.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped; every **session-critical** unit removed before the command is built, and only a unit systemd reports running kept (§4.6) |
 | `rollback.rollback` | `pkexec sh -c "snapper rollback <id> \|\| exit 3; systemctl reboot \|\| exit 4"` | `id` must satisfy `str.isdecimal()` — never `isdigit()`, which also accepts superscript digits such as `²` |
 
@@ -319,11 +319,11 @@ trustworthy. They are not:
 or an exact test, never a `search` — a `re.match` would accept trailing junk:
 
 ```python
-# oneup/gui/repos.py, the module-level _ALIAS_RE — repo aliases. The first character
+# oneup/gui/repos.py, the module-level ALIAS_RE — repo aliases. The first character
 # class excludes '-', so an alias can never be read as an option by zypper; no
 # space, quote, ';', '&', '$' or backtick is permitted, so it cannot break out
 # of the sh -c string either.
-_ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
+ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
 # …used through _alias_ok, which also refuses an all-digit alias: zypper reads a
 # repository argument as its list number too, so "2" could change another repository.
 # if not all(_alias_ok(a) for a in changes): return None
@@ -381,7 +381,7 @@ a backslash simply names a unit that does not exist. It was recorded here rather
 to be tidied when the file was next touched for another reason. That happened: the same
 pattern was rejecting every name the engine actually sends, and the fix removed the
 backslash in the same edit. The pattern now leads with `[A-Za-z0-9]`, which is the shape
-`_ALIAS_RE` already used and which excludes a leading `-` structurally rather than by the
+`ALIAS_RE` already used and which excludes a leading `-` structurally rather than by the
 separate test alone.
 
 **4.6 — A privileged command may be correct and still be unsafe to run.** Validation
@@ -661,7 +661,7 @@ a wildcard is unavoidable, write down what it actually permits.
 Every guard in §4 sits immediately above the command it protects and says so in a comment.
 When the GUI is split into modules (ONEUP-0034, done on `v2` on 2026-08-20), a guard and its
 command must not end up in different files with the assumption travelling between them
-implicitly. That is what kept `_split_session_critical` with `restart_services`, the alias
+implicitly. That is what kept `split_session_critical` with `restart_services`, the alias
 guard with the repository apply command, and the snapshot-id check with the rollback call:
 each pair moved into one module together.
 

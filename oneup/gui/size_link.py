@@ -71,7 +71,7 @@ class SizeLink(QWidget):
         # Copies of the two sentences `run.py` shows through `set_size_result` ("Nothing
         # to download", and "↓ {size} to download" for the system size): reword one
         # there and reword it here. The figure is the engine's own `@@SIZE@@` text, not
-        # `markers._format_size`'s, so the sample is not `markers.WIDEST_SIZE`.
+        # `markers.format_size`'s, so the sample is not `markers.WIDEST_SIZE`.
         for sentence in (QCoreApplication.translate("run", "Nothing to download"),
                          QCoreApplication.translate("run", "↓ {size} to download").format(
                              size="9999.9 MiB")):
