@@ -1,8 +1,9 @@
 """Ask polkit whether a caller may: §4.4. Any error is a refusal.
 
 The subject is the caller's unique bus name, never a pid: CVE-2013-4288 was a race in
-the pid-based subject. A caller who left mid-check gets `denied`, never a yes
-(CVE-2021-3560).
+the pid-based subject. `check` can still answer yes for a caller who left mid-check
+(CVE-2021-3560): a caller that grants anything on a yes must re-check that the name
+still has an owner, as `server.Service._opened` does.
 """
 
 from __future__ import annotations

@@ -2068,6 +2068,12 @@ if [[ ! -f "$d/run.state" ]]; then
 else
     echo "  FAIL - a finished run left its record behind"; FAIL=$((FAIL+1))
 fi
+# ONEUP-0433: `--steps=` drops an unknown key, and the window counts the run's steps
+# from line 3, so a typo there made it wait for a step that never runs.
+rm -f "$d/state-during-run"
+ONEUP_RUN_STATE="$d/run.state" run_engine "$d" --steps=system,sytem >/dev/null 2>&1
+mapfile -t st < "$d/state-during-run" 2>/dev/null || st=()
+check_eq "an unknown step key is not recorded as running" "system" "${st[2]:-}"
 rm -rf "$d"
 
 # ONEUP-0058 / files-and-naming.md §7 Trap 2. The engine's log directory has no override,
@@ -5750,6 +5756,46 @@ steps.shutil.which = lambda _name: None
 got = steps._keep_multiversion(["foo", "kernel-default"])
 raise SystemExit(0 if got is None else f"got {got!r}")'
 
+# ONEUP-0433: `enabled=always` is on to zypper (measured with `zypper --reposd-dir … lr`,
+# 2026-11-25), and read as off it made a --skip-repo of that source a silent no-op.
+echo "TEST: a source is read as switched off exactly when zypper reads it so (ONEUP-0433)"
+py_case "always and + are on; never and - are off" '
+import os, pathlib
+d = pathlib.Path(os.environ["XDG_STATE_HOME"]) / "repos.d"
+d.mkdir()
+want = {"always": False, "+": False, "never": True, "-": True, "1": False, "0": True}
+for n, value in enumerate(want):
+    (d / f"r{n}.repo").write_text(f"[r{n}]\nenabled={value}\nbaseurl=file:///x\n")
+os.environ["ONEUP_REPOS_DIR"] = str(d)
+from oneup.engine import repos
+got = {value: repos.repo_switched_off(f"r{n}") for n, value in enumerate(want)}
+raise SystemExit(0 if got == want else f"got {got!r}")'
+
+# ONEUP-0433: on the service route a root call that fell back to sudo dropped its own
+# sudo flags, so the cleanup re-enable lost its `-n` and could block on a password box.
+echo "TEST: a service-route call that falls back to sudo keeps its sudo flags (ONEUP-0433)"
+py_case "the fallback call still carries -n" '
+from oneup.engine import privilege, route
+privilege._ROUTE = route.SERVICE
+def fall_back():
+    privilege._ROUTE = route.SUDO
+    return False
+privilege._service_session = fall_back
+seen = []
+privilege.sudo = lambda argv, flags=(), **_kw: (seen.append(tuple(flags)), (0, ""))[1]
+privilege.root("repo-enable", {"alias": "packman"}, flags=("-n",))
+raise SystemExit(0 if seen == [("-n",)] else f"got {seen!r}")'
+
+# ONEUP-0433: only the transaction reader turned a signalled child into a shell's 128+N;
+# `run` returned -15, so a caller reading 143 as "stopped" would have missed it.
+echo "TEST: every child runner reports a signalled child as 128+N (ONEUP-0433)"
+py_case "run, run_apart, the streaming run and the bounded run all say 143 for SIGTERM" '
+from oneup.engine import proc
+argv = ["sh", "-c", "kill -TERM $$"]
+got = (proc.run(argv)[0], proc.run_apart(argv)[0], proc.run(argv, stream=True)[0],
+       proc.run(argv, deadline=10)[0])
+raise SystemExit(0 if got == (143,) * 4 else f"got {got!r}")'
+
 # ONEUP-0422: `Curl` matched libcurl4 in the plan, so a disk-full failure read as one
 # source's fault and set off the probe ONEUP-0025 says it must not.
 echo "TEST: a package name does not make a failure repo-scoped (ONEUP-0422)"
@@ -6079,7 +6125,7 @@ py_case "a transaction log that cannot be created fails the step, not the run" '
 import contextlib, io, types
 from oneup.engine import repos, steps
 repos.refresh_repos = lambda **_k: None
-steps.run_changes = lambda: types.SimpleNamespace(rows=[], exact=False)
+steps.planned_changes = lambda: types.SimpleNamespace(rows=[], exact=False)
 def full(*_a, **_k):
     raise OSError(28, "No space left on device")
 steps.tempfile.mkstemp = full

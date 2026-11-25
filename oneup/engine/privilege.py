@@ -157,9 +157,11 @@ def sudo_init() -> None:
     kill it is the shape `CLAUDE.md` §6's fourth trap names, so it is started
     only where `cleanup` can already reach it.
 
-    Re-entering it re-runs the validate: its one early return is `auth_current`,
-    which is false for precisely the users the held path is for, and the run
-    driver's `held_auth` is what skips the second call. It does NOT start a
+    It has two early returns. On the service route, a session that opens ends it
+    before any validate (`_open_service` returns at once when one is already
+    open). On the sudo route the one early return is `auth_current`, which is
+    false for precisely the users the held path is for, so re-entering re-runs the
+    validate, and the run driver's `held_auth` is what skips the second call. It does NOT start a
     second keep-alive — `_start_keepalive` refuses while one is running, and
     that refusal is what keeps INV-9.
     """
@@ -172,7 +174,7 @@ def sudo_init() -> None:
         why = _open_service()
         if why is None:
             return
-        _service_unreachable(why)
+        _fall_back_or_abort(why)
 
     # If the ONEUP-0023 drop-in is active AND grants what this engine needs,
     # every privileged command below is individually NOPASSWD, so no cached
@@ -215,7 +217,7 @@ def sudo_init() -> None:
             # Not a cancel: the box never appeared, so pressing Update again cannot help.
             # A half-finished update can leave its toolkit mismatched, and the box is a Qt
             # program; the terminal still works (ONEUP-0337).
-            suffix, command = steps.finish_in_terminal()
+            suffix, command = steps.finish_by_hand_hint()
             markers.hint(
                 "askpass-unavailable" + suffix,
                 say="The password box could not start, so OneUp cannot get administrator "
@@ -268,7 +270,7 @@ def chosen_route() -> str:
     """`route.SUDO` or `route.SERVICE`: chosen on the first call, then fixed for the run.
 
     Fixed because §4.7 forbids a route switch mid-run. The one change it allows is
-    `_service_unreachable`'s fallback, which happens before any root command has run.
+    `_fall_back_or_abort`'s fallback, which happens before any root command has run.
     """
     global _ROUTE
     if _ROUTE is None:
@@ -308,7 +310,7 @@ def _open_service() -> str | None:
     return None
 
 
-def _service_unreachable(why: str) -> None:
+def _fall_back_or_abort(why: str) -> None:
     """The service route failed before its session opened: fall back, or end the run.
 
     §4.7: only the `auto` route falls back, and only interactively, with one line saying
@@ -405,8 +407,8 @@ def root(op: str, args: dict[str, object] | None = None, *, flags: Sequence[str]
     """
     from . import rootops, route  # deferred: rootops reads this module's argvs
     if chosen_route() == route.SERVICE:
-        return _service_root(op, args, merge_stderr=merge_stderr, stream=stream,
-                             on_line=on_line)
+        return _service_root(op, args, flags=flags, merge_stderr=merge_stderr,
+                             stream=stream, on_line=on_line)
     try:
         argv = rootops.build(op, args)
     except rootops.Invalid as exc:
@@ -471,15 +473,17 @@ def _service_job(op: str, args: dict[str, object] | None, *, merge_stderr: bool)
     return None
 
 
-def _service_root(op: str, args: dict[str, object] | None, *, merge_stderr: bool,
-                  stream: bool,
+def _service_root(op: str, args: dict[str, object] | None, *, flags: Sequence[str],
+                  merge_stderr: bool, stream: bool,
                   on_line: Callable[[str], None] | None = None) -> tuple[int, str]:
     """`root()` on the service route: the same status and output, from the service's job.
 
     A streamed call merges stderr, as `proc.run`'s pump does on the sudo route.
+    `flags` matter only when the route falls back to sudo here, before the call.
     """
     if not _service_session():
-        return root(op, args, merge_stderr=merge_stderr, stream=stream, on_line=on_line)
+        return root(op, args, flags=flags, merge_stderr=merge_stderr, stream=stream,
+                    on_line=on_line)
     job = _service_job(op, args, merge_stderr=merge_stderr or stream)
     if job is None:
         return 1, ""

@@ -879,9 +879,20 @@ def test_end_after_bookkeeping(base: Path) -> None:
     server.polkit.check = lambda *_a, **_k: (gate.wait(5), server.polkit.YES)[1]
     errors: list[str] = []
     answers: list[tuple] = []
+    os.environ["ONEUP_SERVICE_STATE_DIR"] = str(d / "state")
+    os.environ["ONEUP_SERVICE_RUNTIME_DIR"] = str(d / "run")
+    srv = server.Service(None)
+    os.environ.pop("ONEUP_SERVICE_STATE_DIR")
+    os.environ.pop("ONEUP_SERVICE_RUNTIME_DIR")
     srv._error = lambda _msg, name, _text: errors.append(name)
     srv._reply = lambda _msg, _sig="", body=(): answers.append(body)
-    srv.router = None
+
+    def answered(count: int) -> bool:
+        """Run the results the checks posted, as the loop would; are `count` in?"""
+        while not srv.events.empty():
+            srv.events.get()()
+        return len(answers) >= count
+
     asking = SimpleNamespace(header=SimpleNamespace(fields={}))
     try:
         for _ in range(cap + 1):
@@ -889,15 +900,30 @@ def test_end_after_bookkeeping(base: Path) -> None:
         busy = list(errors)
     finally:
         gate.set()
-        server.polkit.check = real_check
-    wait_for(lambda: len(answers) >= cap, 10)
+    wait_for(lambda: answered(cap), 10)
     check("past the cap, CanUpdate answers Busy instead of starting another thread",
           len(busy) == 1 and busy[0].endswith("Busy") and len(answers) == cap,
           (busy, len(answers)))
     srv._can_update(asking)                       # the slots came back with the answers
     check("once those are answered, the next CanUpdate is answered too",
-          wait_for(lambda: len(answers) == cap + 1, 10) and len(errors) == 1,
+          wait_for(lambda: answered(cap + 1), 10) and len(errors) == 1,
           (errors, len(answers)))
+
+    # ONEUP-0433: a CanUpdate still with polkit did not count as busy, so a service
+    # past its idle time exited with that caller's answer still owed.
+    gate.clear()
+    srv.idle_seconds = 0
+    loop = threading.Thread(target=srv.serve, daemon=True)
+    srv._can_update(asking)
+    loop.start()
+    time.sleep(0.5)
+    waited = loop.is_alive()
+    gate.set()
+    loop.join(10)
+    server.polkit.check = real_check
+    check("the service stays up while a CanUpdate is with polkit", waited)
+    check("and exits idle once that caller has its answer",
+          not loop.is_alive() and len(answers) == cap + 2, len(answers))
 
 
 def test_idle(base: Path) -> None:

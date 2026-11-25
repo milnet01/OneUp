@@ -740,6 +740,14 @@ def main() -> int:
               "(2/2) Installing: kernel-default-devel-6.9.1-1.1.noarch [...done]\n"),
           "kernel-default-devel-6.9.1-1.1")
 
+    # A line ends at \n alone, as the live stream and the Bash read it (ONEUP-0152). Split
+    # at the vertical tab, this line's tail read as an action rpm finished.
+    tabbed = "Updating /etc/x\x0b(1/1) Installing: foo-1.0-1.1.x86_64 [...done]\n"
+    check("rpm_changed: a vertical tab does not start a line", parsers.rpm_changed(tabbed),
+          False)
+    check("installed_packages: a vertical tab does not start a line",
+          parsers.installed_packages(tabbed), "")
+
     # ONEUP-0422: the failure patterns read the log with package names taken out. The
     # line shapes are a real run's (2026-11-16); a download error on its line survives.
     masked = parsers.without_package_names(

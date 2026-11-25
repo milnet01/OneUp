@@ -55,7 +55,7 @@ _STEP_START = 0.0
 
 # What the system step found, read by the reboot check and the summary.
 SYS_CHANGED = False
-SYS_COUNT = ""
+SYS_COUNT = ""      # text, as the summary tests it: "" = no count, "0" = up to date
 SYS_REBOOT_PARTS: list[str] = []   # reboot-reason component codes
 FW_CHANGED = False
 FLATPAK_UPDATED = 0   # Flatpak apps updated; the summary and notification report it (ONEUP-0277)
@@ -641,7 +641,7 @@ def system_changes(sizes: bool) -> SystemListing:
     return system_updates(sizes)._replace(why=listing) if isinstance(listing, str) else listing
 
 
-def run_changes() -> SystemListing:
+def planned_changes() -> SystemListing:
     """The run's own list, sizes included: its transaction's dry run, as root.
 
     Asked after the refresh, so the header counts what the run will change from the
@@ -677,6 +677,9 @@ def _dry_run_listing(rc: int, out: str, sizes: bool) -> SystemListing | str:
                     where[c][1], c.change)
             for c in changes if valid_package(c.name)]
     skipped = sorted(set(SKIPPED_REPO.findall("\n".join(messages))))
+    # Only 106 passes through: `actions._check_system` reads any non-zero `rc` as
+    # "couldn't read the sources", and the other dry-run exits that reach here
+    # (`_DRY_RUN_OK`) are informational.
     return SystemListing(106 if rc == 106 else 0, True, len(changes), rows, skipped,
                          exact=True)
 
@@ -724,7 +727,7 @@ def _is_leap() -> bool:
         return False
 
 
-def finish_in_terminal() -> tuple[str, str]:
+def finish_by_hand_hint() -> tuple[str, str]:
     """The hint-code suffix and the command a user types to finish the update by hand:
     `update` on Leap, `dup` on Tumbleweed, as `system_txn_argv` runs them."""
     return ("-leap", "sudo zypper update") if _is_leap() else ("", "sudo zypper dup")
@@ -884,9 +887,17 @@ def _commit_pass() -> bool:
 _TRANSFER_FAILURE = re.compile(
     r"bytes missing|returned error: 404|Download.*failed|Curl error|connection failed",
     re.IGNORECASE)
+# Each wording once, for the CDN retry's exclusion below and `_failure`'s hints: a
+# conflict wording added to one list only would let the retry run on a conflict
+# (ONEUP-0227 had to patch both). zypper's solver words a conflict several ways;
+# a real run (2026-09-22) said only "Problem: 1: … cannot be provided".
+_DISK_FULL = re.compile(r"No space left|disk full", re.IGNORECASE)
+_CONFLICT = re.compile(
+    r"conflict|nothing provides|not installable|cannot be provided"
+    r"|^Problem: [0-9]|does not belong to a distupgrade repository",
+    re.IGNORECASE | re.MULTILINE)
 _NOT_TRANSFER = re.compile(
-    r"No space left|disk full|conflict|nothing provides|not installable|cannot be provided"
-    r"|^Problem: [0-9]|does not belong to a distupgrade repository|" + repos.KEY_FAILURE_RE,
+    "|".join((_DISK_FULL.pattern, _CONFLICT.pattern, repos.KEY_FAILURE_RE)),
     re.IGNORECASE | re.MULTILINE)
 
 
@@ -965,9 +976,6 @@ def _system_upgrade_inner() -> bool:
 
 
 _UPGRADE_COUNT = parsers.UPGRADE_COUNT
-# zypper's summary says "122 packages to upgrade, 4 new." or, with no upgrades,
-# "4 new packages to install." Case-sensitive, so the list header "The following
-# 4 NEW packages are going to be installed:" is not a second match (ONEUP-0288).
 _INSTALL_COUNT = parsers.INSTALL_COUNT
 _FAILED_PKG = re.compile(r"^(?:Preloading|Retrieving): (\S+) \[([^]]*)\]", re.MULTILINE)
 _CACHED = re.compile(r"^(done|already in cache)$", re.IGNORECASE)
@@ -1111,7 +1119,7 @@ def _failure(systemic: bool, import_keys: bool) -> None:
         hint += ("openSUSE's servers are still catching up with this update. Nothing was "
                  "installed and everything already downloaded has been kept; try again "
                  "later.")
-    elif re.search(r"No space left|disk full", text, re.IGNORECASE):
+    elif _DISK_FULL.search(text):
         code = "disk-full"
         hint = ("Ran out of disk space — free some room (clear the package cache, delete "
                 "old snapshots) and retry.")
@@ -1140,18 +1148,14 @@ def _failure(systemic: bool, import_keys: bool) -> None:
         hint = (f"The package {failed.group(1)} could not be installed, so nothing was "
                 "changed. The log has the reason; run the update again, and if it fails "
                 "the same way, check the log before trying anything else.")
-    # zypper's solver words a conflict several ways; a real run (2026-09-22) said only
-    # "Problem: 1: … cannot be provided" and got no hint at all (ONEUP-0227).
-    elif re.search(r"conflict|nothing provides|not installable|cannot be provided"
-                   r"|^Problem: [0-9]|does not belong to a distupgrade repository",
-                   _FILE_CONFLICT_CHECK.sub("", text), re.IGNORECASE | re.MULTILINE):
+    elif _CONFLICT.search(_FILE_CONFLICT_CHECK.sub("", text)):
         code = "package-conflict"
         hint = ("A package conflict — often a third-party repo. Check the log; you may "
                 "need to disable a conflicting repository.")
     if SYS_PARTIAL:
         # Sent before the cause's hint, and the window puts it ahead of every hint:
         # it is what the user must act on first, whatever the cause (ONEUP-0331).
-        suffix, command = finish_in_terminal()
+        suffix, command = finish_by_hand_hint()
         markers.hint(
             "system-incomplete" + suffix,
             say="The update stopped part-way, so your system is only partly updated. "
@@ -1166,6 +1170,35 @@ def _failure(systemic: bool, import_keys: bool) -> None:
                      say="The system update failed. The log has the reason; "
                          "run the update again.")
     end_step("system", "fail", "failed", "zypper reported an error")
+
+
+def _set_aside_failing_sources(opts) -> tuple[bool, bool]:
+    """After a repo-scoped failure: name the failing sources and act on them.
+
+    Returns (ok, systemic). Unattended (`--auto-skip-repos`), the culprits are
+    switched off and the transaction retried; interactively each is offered as a
+    `REMEDY` and nothing is switched off. More than `MAX_SKIP_REPOS` at once is
+    systemic, not one bad source. The caller checks `SYS_STOPPED` after this.
+    """
+    failing = repos.find_failing_repos()
+    if proc.stop_pending():
+        # A probe cut short names only some sources, and a Stop is never
+        # answered by setting sources aside and running again (ONEUP-0424).
+        return False, False
+    if len(failing) > MAX_SKIP_REPOS:
+        return False, True
+    if not failing:
+        return False, False
+    if not opts.auto_skip:
+        for entry in failing:
+            markers.marker("REMEDY", "skip-repo", entry.partition(" ")[0])
+        return False, False
+    for entry in failing:
+        alias, _, reason = entry.partition(" ")
+        repos.disable_repo(alias, reason)
+    # Retry on the healthy repositories only if we actually disabled something:
+    # a disable that itself failed must not silently retry.
+    return (_system_upgrade() if repos.DISABLED else False), False
 
 
 def run_system(opts) -> None:
@@ -1202,7 +1235,7 @@ def run_system(opts) -> None:
     # The package model's list for this run, from its own dry run (ONEUP-0335 (d)).
     # The transaction's own lines then move each package on. `change` is sent only
     # when the dry run answered, so the rootless list's lines are as before.
-    listing = run_changes()
+    listing = planned_changes()
     for row in listing.rows:
         markers.marker("PKG", "system", "queued", row.name, row.edition, row.size,
                        row.old, row.repo, row.change if listing.exact else None)
@@ -1221,11 +1254,6 @@ def run_system(opts) -> None:
     _SYS_LOG = Path(path)
     try:
         ok = _system_upgrade()
-        if SYS_STOPPED:
-            # Returns BEFORE the repo-scoped probe below, which would otherwise
-            # re-run the whole transaction the user just stopped.
-            end_step("system", "skip", "skipped", "stopped before installing anything")
-            return
         systemic = False
         # Only probe when we were not already told which sources to skip — a
         # --skip-repo run already named them, so probing again would mask a
@@ -1233,39 +1261,16 @@ def run_system(opts) -> None:
         # repo-scoped (disk-full and conflicts are not).
         # Never on a part-updated system: the probe's remedy is to run the
         # transaction again, on top of one rpm abandoned half-way (ONEUP-0330).
-        if (not ok and not SYS_PARTIAL and not opts.skip_repos
+        # Never after a Stop: the probe would re-run the transaction just stopped.
+        if (not ok and not SYS_STOPPED and not SYS_PARTIAL and not opts.skip_repos
                 and repos.repo_scoped_failure(_SYS_LOG)):
-            failing = repos.find_failing_repos()
-            if proc.stop_pending():
-                # A probe cut short names only some sources, and a Stop is never
-                # answered by setting sources aside and running again (ONEUP-0424).
-                failing = []
-            if len(failing) > MAX_SKIP_REPOS:
-                systemic = True                    # too many at once: not one bad source
-            elif failing:
-                if opts.auto_skip:
-                    for entry in failing:
-                        alias, _, reason = entry.partition(" ")
-                        repos.disable_repo(alias, reason)
-                    # Retry on the healthy repositories only if we actually
-                    # disabled something: a disable that itself failed must not
-                    # silently retry.
-                    if repos.DISABLED:
-                        ok = _system_upgrade()
-                        # The retry can itself be stopped, and the boundary check
-                        # that guards the FIRST transaction sits above this probe
-                        # rather than below it — so without this a stop during the
-                        # retry falls through and reports the solver's package
-                        # count as an install that never happened (INV-1).
-                        if SYS_STOPPED:
-                            end_step("system", "skip",
-                                     "skipped", "stopped before installing anything")
-                            return
-                else:
-                    # Interactive: ask, do not act. Offer the skip for each
-                    # culprit; disable nothing on our own.
-                    for entry in failing:
-                        markers.marker("REMEDY", "skip-repo", entry.partition(' ')[0])
+            ok, systemic = _set_aside_failing_sources(opts)
+        # The one stop check for the first transaction AND the retry: without it a
+        # stopped retry reports the solver's package count as an install that never
+        # happened (INV-1).
+        if SYS_STOPPED:
+            end_step("system", "skip", "skipped", "stopped before installing anything")
+            return
         if ok:
             _success(refresh_ok)
         else:

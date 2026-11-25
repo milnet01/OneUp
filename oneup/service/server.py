@@ -33,6 +33,7 @@ from jeepney import (
 from jeepney.io.threading import DBusRouter, open_dbus_connection
 
 from oneup.engine import repos, rootops, steps
+from oneup.engine.service_client import STILL_RUNNING
 
 from . import jobs, polkit
 
@@ -50,6 +51,11 @@ RETRY_FOR = 600.0                 # how long a failed re-enable is retried (§4.
 
 _DBUS = DBusAddress("/org/freedesktop/DBus", bus_name="org.freedesktop.DBus",
                     interface="org.freedesktop.DBus")
+_DO_NOT_QUEUE = 0x4               # RequestName's flag: refuse rather than wait in line
+_PRIMARY_OWNER = 1                # RequestName's reply when the name is now ours
+# A restored re-enable's owner: a previous service run's session, whose uid is not
+# kept. The audit lines print it as uid=0, which here never means root.
+_PREVIOUS_RUN = 0
 
 _INTROSPECTION = f"""<node>
  <interface name="{INTERFACE}">
@@ -132,6 +138,7 @@ class Service:
         self.events: queue.Queue = queue.Queue()
         self.sessions: dict[str, Session] = {}
         self.checking: set[str] = set()             # callers whose OpenSession is with polkit
+        self.answering = 0                          # CanUpdate checks still with polkit
         self.job: jobs.Job | None = None
         self.ending: list[Session] = []             # sessions whose clean-up is still owed
         # Re-enables that failed at a session's end, each with when to give up (§4.5).
@@ -163,7 +170,8 @@ class Service:
         restore = self._read_paused()
         if restore:
             audit(f"restoring sources a previous service left off: {','.join(sorted(restore))}")
-            self.retry = [(0, alias, time.monotonic() + RETRY_FOR) for alias in sorted(restore)]
+            self.retry = [(_PREVIOUS_RUN, alias, time.monotonic() + RETRY_FOR)
+                          for alias in sorted(restore)]
 
     # --- the loop ---------------------------------------------------------------
 
@@ -190,7 +198,8 @@ class Service:
                     if session.job is None or session.told:
                         self._end_session(session, "service stopping")
             self._clean_up()
-            if self.sessions or self.checking or self.job or self.ending or self.retry:
+            if (self.sessions or self.checking or self.answering or self.job or self.ending
+                    or self.retry):
                 self.last_busy = time.monotonic()
                 continue
             if self.stopping:
@@ -212,7 +221,7 @@ class Service:
         if hdr.fields.get(HeaderFields.path) != OBJECT_PATH:
             self._error(msg, "org.freedesktop.DBus.Error.UnknownObject", "no such object")
             return
-        handler = {
+        handlers = {
             (INTERFACE, "OpenSession"): self._open_session,
             (INTERFACE, "Run"): self._run,
             (INTERFACE, "Read"): self._read,
@@ -222,11 +231,11 @@ class Service:
             ("org.freedesktop.DBus.Properties", "Get"): self._get_property,
             ("org.freedesktop.DBus.Properties", "GetAll"): self._get_all,
             ("org.freedesktop.DBus.Introspectable", "Introspect"): self._introspect,
-        }.get((iface, member))
-        if handler is None and not iface:
-            handler = {"OpenSession": self._open_session, "Run": self._run,
-                       "Read": self._read, "Stop": self._stop, "CloseSession": self._close_session,
-                       "CanUpdate": self._can_update}.get(member)
+        }
+        # The D-Bus specification lets a method call leave its interface out. Such a
+        # call is resolved against this service's own interface only, never Properties
+        # or Introspectable. `_INTROSPECTION` lists the same methods by hand.
+        handler = handlers.get((iface or INTERFACE, member))
         if handler is None:
             self._error(msg, "org.freedesktop.DBus.Error.UnknownMethod", f"no method {member}")
             return
@@ -347,6 +356,9 @@ class Service:
             # session's to switch on, so its disable is not recorded (ONEUP-0393).
             # One the service itself still owes a re-enable is off because of OneUp,
             # so this session takes it over; `_job_ended` drops the retry (ONEUP-0426).
+            # Where a disable is tracked: `found_off`, set here, says whether to record
+            # it; `pending`, set below, holds it while its job runs; `_job_ended` moves
+            # it to `session.disabled`. `_paused_now` reads those last two.
             if args["alias"] in self._owed():
                 session.found_off.discard(args["alias"])
             elif repos.repo_switched_off(args["alias"]):
@@ -404,7 +416,7 @@ class Service:
         status = job.status if job is not self.job else None
         data = job.read(offset)
         if data:
-            self._reply(msg, "ayi", (data, -1))
+            self._reply(msg, "ayi", (data, STILL_RUNNING))
             return True
         if status is not None:
             self._reply(msg, "ayi", (b"", status))
@@ -422,7 +434,7 @@ class Service:
                 if now < deadline:
                     self.waiting.append((msg, session, offset, deadline))
                 else:
-                    self._reply(msg, "ayi", (b"", -1))
+                    self._reply(msg, "ayi", (b"", STILL_RUNNING))
 
     @staticmethod
     def _validate(op: str, args: dict) -> None:
@@ -491,15 +503,24 @@ class Service:
             self._error(msg, _ERR + "Busy", "too many checks at once")
             return
 
+        # Counted until the loop sends the answer: a check still with polkit keeps the
+        # service from exiting idle with the caller's reply owed.
+        self.answering += 1
+
         def check() -> None:
+            answer = polkit.DENIED
             try:
                 answer = polkit.check(self.router, caller, polkit.SYSTEM_UPDATE,
                                       interactive=False)
-                self._reply(msg, "s", ("yes" if answer == polkit.YES else "no",))
             finally:
                 _CHECK_SLOTS.release()
+                self._post(lambda: self._can_update_answered(msg, answer))
 
         threading.Thread(target=check, daemon=True).start()
+
+    def _can_update_answered(self, msg: Message, answer: str) -> None:
+        self.answering -= 1
+        self._reply(msg, "s", ("yes" if answer == polkit.YES else "no",))
 
     # --- sessions end ---------------------------------------------------------------
 
@@ -694,16 +715,17 @@ def main() -> int:
     # Every message reaches the loop through one queue, in arrival order.
     # The handles are kept: a filter lives as long as its handle.
     handles = [router.filter(MatchRule(type="method_call"), queue=service.events)]
-    handles.append(router.filter(MatchRule(type="signal", sender="org.freedesktop.DBus",
-                            interface="org.freedesktop.DBus", member="NameOwnerChanged"),
-                  queue=service.events))
+    # A caller leaving is how its session ends. Both halves are needed: the filter
+    # routes the signal to the loop, and AddMatch asks the bus to send it at all.
+    owner_changed = MatchRule(type="signal", sender="org.freedesktop.DBus",
+                              interface="org.freedesktop.DBus", member="NameOwnerChanged")
+    handles.append(router.filter(owner_changed, queue=service.events))
     router.send_and_get_reply(new_method_call(
-        _DBUS, "AddMatch", "s",
-        ("type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',"
-         "member='NameOwnerChanged'",)), timeout=10)
+        _DBUS, "AddMatch", "s", (owner_changed.serialise(),)), timeout=10)
     reply = router.send_and_get_reply(
-        new_method_call(_DBUS, "RequestName", "su", (BUS_NAME, 0x4)), timeout=10)
-    if reply.header.message_type != MessageType.method_return or reply.body[0] != 1:
+        new_method_call(_DBUS, "RequestName", "su", (BUS_NAME, _DO_NOT_QUEUE)), timeout=10)
+    if (reply.header.message_type != MessageType.method_return
+            or reply.body[0] != _PRIMARY_OWNER):
         print("oneup-service: could not own the bus name", file=sys.stderr, flush=True)
         return 1
     service.take_over()

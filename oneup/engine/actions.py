@@ -24,10 +24,14 @@ if TYPE_CHECKING:  # the run-time import would be a cycle — `__main__` imports
 # Overridable so the suite points them at throwaway paths, never real /etc.
 AUTH_FILE = Path(os.environ.get("ONEUP_AUTH_FILE") or "/etc/sudoers.d/oneup")
 
-# /usr/libexec per FHS 3.0 (Tumbleweed since 2020), /usr/lib on Leap 15.x.
-GUARD_DIR = "/usr/libexec" if Path("/usr/libexec").is_dir() else "/usr/lib"
-GUARD_FILE = Path(os.environ.get("ONEUP_GUARD_FILE") or f"{GUARD_DIR}/oneup-download-guard")
-_SYSTEM_GUARDS = ("/usr/libexec/oneup-download-guard", "/usr/lib/oneup-download-guard")
+# /usr/libexec per FHS 3.0 (Tumbleweed since 2020), /usr/lib on Leap 15.x. Every
+# guard path derives from these two, so revoke sweeps wherever a grant could have
+# put one. The window's `gui/auth.py` `OLD_GUARDS` mirrors `_SYSTEM_GUARDS`.
+_GUARD_DIRS = ("/usr/libexec", "/usr/lib")
+_GUARD_NAME = "oneup-download-guard"
+_SYSTEM_GUARDS = tuple(f"{folder}/{_GUARD_NAME}" for folder in _GUARD_DIRS)
+GUARD_DIR = _GUARD_DIRS[0] if Path(_GUARD_DIRS[0]).is_dir() else _GUARD_DIRS[1]
+GUARD_FILE = Path(os.environ.get("ONEUP_GUARD_FILE") or f"{GUARD_DIR}/{_GUARD_NAME}")
 # Where sudo reads its policy: a drop-in under either is live.
 _LIVE_POLICY = ("/etc/", "/usr/etc/")
 
@@ -279,9 +283,8 @@ def _check_firmware() -> tuple[int, bool]:
     """Ask fwupd whether anything is pending, and say when it could not answer.
 
     fwupdmgr(1) EXIT STATUS: 0 = ran and found something, 2 = ran with no actions,
-    1/3 = it could not answer. The docstring here used to read "yes or no, so there
-    is no unreadable case", which is a property the tool's exit surface does not
-    have — an unreachable daemon rendered as a bare zero, i.e. "you're up to date".
+    1/3 = it could not answer. So there IS an unreadable case: read as a bare zero,
+    an unreachable daemon would say "you're up to date".
     """
     fw_rc, _ = proc.run(["fwupdmgr", "get-updates"], no_input=True)  # ONEUP-0222
     if fw_rc not in (0, 2):
