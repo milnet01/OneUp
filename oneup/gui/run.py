@@ -1150,7 +1150,7 @@ def handle_marker(win, line: str):
         if parts and parts[0] == "import-keys":
             win._remedy_keys = True
         elif (parts and parts[0] == "skip-repo" and len(parts) >= 2
-              and repos.ALIAS_RE.fullmatch(parts[1])):
+              and repos.alias_ok(parts[1])):
             # Checked because the alias goes back to the engine as --skip-repo=
             # (security.md §4, ONEUP-0144): the same guard the repository editor uses.
             win._remedy_skips.append(parts[1])

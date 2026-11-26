@@ -96,7 +96,9 @@ config.
   alias containing `@` or `+` must not be refused by the engine when the GUI would
   accept it, or that source would never be set aside and the whole update would
   still fail. A non-matching alias is refused and the repo is *not* skipped
-  (fail-closed).
+  (fail-closed). The Python engine (`valid_alias`) and the window
+  (`alias_ok`) also refuse an all-digit alias, because zypper reads a repository
+  argument as its list number too (ONEUP-0449); the frozen Bash fallback does not.
 
 ### Identifying the culprit(s) — `find_failing_repos()`
 

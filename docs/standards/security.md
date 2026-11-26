@@ -136,7 +136,7 @@ update run:
 
 | Site | Command | Guard |
 | --- | --- | --- |
-| `RepoManagerDialog._build_apply_command` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must pass `_alias_ok` — match `ALIAS_RE` and not be all digits — else the whole command is `None` and nothing runs |
+| `RepoManagerDialog._build_apply_command` | `pkexec sh -c "zypper … modifyrepo/removerepo <aliases>"` | every alias must pass `alias_ok` — match `ALIAS_RE` and not be all digits — else the whole command is `None` and nothing runs |
 | `banners.restart_services` | `pkexec systemctl restart <units>` — **argv form, no shell** | each unit matched against a unit-name pattern; anything starting `-` dropped; every **session-critical** unit removed before the command is built, and only a unit systemd reports running kept (§4.6) |
 | `rollback.rollback` | `pkexec sh -c "snapper rollback <id> \|\| exit 3; systemctl reboot \|\| exit 4"` | `id` must satisfy `str.isdecimal()` — never `isdigit()`, which also accepts superscript digits such as `²` |
 
@@ -324,9 +324,9 @@ or an exact test, never a `search` — a `re.match` would accept trailing junk:
 # space, quote, ';', '&', '$' or backtick is permitted, so it cannot break out
 # of the sh -c string either.
 ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
-# …used through _alias_ok, which also refuses an all-digit alias: zypper reads a
+# …used through alias_ok, which also refuses an all-digit alias: zypper reads a
 # repository argument as its list number too, so "2" could change another repository.
-# if not all(_alias_ok(a) for a in changes): return None
+# if not all(alias_ok(a) for a in changes): return None
 
 # rollback.rollback — the rollback target is interpolated into a root shell.
 if not target.isdecimal(): return        # isdecimal() also rejects empty

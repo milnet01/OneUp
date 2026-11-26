@@ -2259,6 +2259,19 @@ check        "the up-front prompt names whose password (ONEUP-0298)" \
 check        "every later prompt names whose password too" \
              "ENV=OneUp needs the password for %p" "$seen"
 check_absent "the old unnamed prompt is gone" "authenticate to update the system" "$seen"
+# ONEUP-0441: switching Passwordless on or off updates nothing, so its box says what it is
+# for. The grant needs no further mocks: its validate runs before anything can fail.
+for verb in on off; do
+    rm -f "$d/sudo.seen"
+    flag=--grant-auth; [[ $verb == off ]] && flag=--revoke-auth
+    ONEUP_AUTH_FILE="$d/oneup-sudoers" run_engine "$d" "$flag" >/dev/null 2>&1
+    seen=$(cat "$d/sudo.seen" 2>/dev/null)
+    check        "turning Passwordless $verb says so up front (ONEUP-0441)" \
+                 "-p OneUp needs the password for %p to turn Passwordless $verb" "$seen"
+    check        "turning Passwordless $verb says so on every later prompt" \
+                 "ENV=OneUp needs the password for %p to turn Passwordless $verb" "$seen"
+    check_absent "turning Passwordless $verb does not claim to update" "updat" "$seen"
+done
 rm -rf "$d"
 
 # ---------------------------------------------------------------------------
@@ -4659,6 +4672,11 @@ EOF
 chmod +x "$d/zypper"
 out=$(run_engine "$d" --steps=system "--skip-repo=evil; rm -rf /")
 check_absent "unsafe alias never reaches modifyrepo" "modifyrepo --disable evil" "$(cat "$MOCK_ZLOG")"
+# ONEUP-0449: zypper reads an all-digit argument as the repository's list number too.
+: > "$MOCK_ZLOG"
+run_engine "$d" --steps=system "--skip-repo=2" >/dev/null 2>&1 || true
+check_absent "an all-digit alias never reaches modifyrepo (ONEUP-0449)" \
+             "modifyrepo --disable 2" "$(cat "$MOCK_ZLOG")"
 unset MOCK_ZLOG
 rm -rf "$d"
 

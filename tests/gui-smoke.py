@@ -5209,6 +5209,10 @@ def main() -> int:
         # checks it at the marker boundary too. `-` first would be an option, not a name.
         run.handle_line(w, "@@REMEDY@@|skip-repo|--plus-content")
         check("an unsafe skip-repo alias is not armed", w._remedy_skips == ["google-chrome"])
+        # ONEUP-0449: zypper reads "2" as the second repository in its list.
+        run.handle_line(w, "@@REMEDY@@|skip-repo|2")
+        check("an all-digit skip-repo alias is not armed (ONEUP-0449)",
+              w._remedy_skips == ["google-chrome"])
         w._failed_steps = ["system"]
         w._hints = ["The 'google-chrome' repository failed — the rest can still update."]
         w.proc = QProcess(w)

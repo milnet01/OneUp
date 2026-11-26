@@ -61,8 +61,10 @@ _REPO_SCOPED = re.compile(
 
 
 def valid_alias(alias: str) -> bool:
-    """`valid_alias`: is this safe to pass to a privileged command?"""
-    return bool(_ALIAS.fullmatch(alias))
+    """`valid_alias`: is this safe to pass to a privileged command? Never all digits:
+    zypper also reads a repository argument as its list number, so "2" could change a
+    different repository — the window's `alias_ok` refuses it too (ONEUP-0449)."""
+    return bool(_ALIAS.fullmatch(alias)) and not alias.isdecimal()
 
 
 def enabled_repo_aliases() -> list[str]:

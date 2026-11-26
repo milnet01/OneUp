@@ -1,7 +1,7 @@
 """Reading and editing the machine's software sources.
 
 Listing is read-only; applying the changes needs one admin (pkexec) prompt, and
-`_alias_ok` is the guard on the alias that reaches it — the guard and the
+`alias_ok` is the guard on the alias that reaches it — the guard and the
 command it protects stay in one module on purpose
 (`docs/standards/security.md` §9.4).
 """
@@ -38,7 +38,7 @@ from .toggle_switch import ToggleSwitch
 ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9:@._+-]*")
 
 
-def _alias_ok(alias: str) -> bool:
+def alias_ok(alias: str) -> bool:
     """May `alias` reach the root zypper command? It must match `ALIAS_RE` and not be
     all digits: zypper also reads a repository argument as its list number, so "2"
     could change a different repository (ONEUP-0427)."""
@@ -260,7 +260,7 @@ class RepoManagerDialog(QDialog):
         changes = enable + disable + remove
         if not changes:
             return []
-        if not all(_alias_ok(a) for a in changes):
+        if not all(alias_ok(a) for a in changes):
             return None
         parts = []
         if disable:
