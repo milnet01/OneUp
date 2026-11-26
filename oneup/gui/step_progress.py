@@ -135,6 +135,12 @@ def _show(win, key: str, phase: str) -> None:
             win.bar.setRange(0, FULL)
             win.bar.setValue(value)
     # Spotlight's panel reads the same value, and the figures set beside it.
+    show_figures(win)
+
+
+def show_figures(win) -> None:
+    """Redraw the layout's progress figures. Also for a Flatpak pass, which moves no
+    bar but still has a count to show (ONEUP-0457)."""
     host = getattr(win, "host", None)
     if host is not None and shiboken6.isValid(host):
         host.show_progress()

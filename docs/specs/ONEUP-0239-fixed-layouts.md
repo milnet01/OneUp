@@ -169,7 +169,7 @@ Three pieces of run state are new, all on the window and all cleared by `_reset_
 - `win.current_step` — the key of the step running now, or `""`. `STEP_BEGIN` sets it;
   `STEP_END` for that key clears it. Rail's board reads it (§4.3.1).
 - `win.latest_package` — `(key, name, edition)` of the package named by the last `PKG`
-  line, or `None`. Spotlight's latest-package line reads it, and the package's state from
+  line that is not `queued`, or `None`; `STEP_BEGIN` clears it (ONEUP-0457). Spotlight's latest-package line reads it, and the package's state from
   `win.packages` (§4.3.3).
 - `win.engine_finished` — `False` until `on_finished` sets it. The package pages' empty
   sentence reads it (§4.3.1).
@@ -515,7 +515,8 @@ first action line, or at the pass's end. So it leaves *now* while it waits to in
   *Downloaded* is §4.1.1's byte figure of `bytes_total`, printed with `format_size`;
   *Time left* is §4.1.2's estimate. A box whose figure is not known reads *"not known"*.
   *(ONEUP-0322)* With a `total` of 0, *Packages* shows the running tally, *"37 so far"*
-  (`docs/reference/marker-protocol.md` §4.3).
+  (`docs/reference/marker-protocol.md` §4.3). In a Flatpak pass, *Packages* counts the listed apps
+  started, as the status line does (ONEUP-0364, ONEUP-0457).
 - **A total size counts only known sizes.** Where any package's size is `0`, the summary
   says so: *"17.5 MiB, some sizes not known"*. Sizes print with `format_size` in
   `oneup/gui/markers.py`. *(ONEUP-0306)* It gains one decimal place for KiB and MiB, as
@@ -997,3 +998,4 @@ count. *(ONEUP-0335)* No marker change; the engine changes in `parsers.PackageLi
 | 0350-amend | 2026-10-30 | none — an authoring amendment; no reviewer was dispatched, and none is owed | ONEUP-0350: §4.3 Spotlight item 5 gives `last_run` and `rollback_btn` a line of their own. It records code verified in the same change, and this spec is past its two review loops. |
 | 0362-amend | 2026-11-04 | none — an authoring amendment; no reviewer was dispatched, and none is owed | ONEUP-0362: §4.3.2 drops a narrow block's own outline, draws one round the strip, and narrows overflowing blocks to half the strip. The user chose this of three options on 2026-11-04. It records code verified in the same change, and this spec is past its two review loops. |
 | 0363-0364-0366-amend | 2026-11-04 | none — an authoring amendment; no reviewer was dispatched, and none is owed | §4.1.1 adds the leftover step's `remove` phase and the system step's `finish` phase; §4.1.4 counts the listed Flatpak apps where there are any, and greys Stop in all three transaction phases. No invariant changed: INV-20's test lists no apps, so it still reads Flatpak's own count. It records code verified in the same change, and the user approved the marker change on 2026-11-04. |
+| 0457-amend | 2026-11-26 | none — an authoring amendment; no reviewer was dispatched, and none is owed | ONEUP-0457, from the user's run of 2026-11-25: §4.1's `latest_package` skips a `queued` line and `STEP_BEGIN` clears it, and §4.3.1's *Packages* box counts a Flatpak pass's listed apps, as the status line already did. Written with the code and its test |

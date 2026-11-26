@@ -13010,12 +13010,22 @@ when complete (that document's §7).
   Source: user-report-2026-11-25.
   Lanes: engine, gui.
 
-- 📋 [ONEUP-0457] **Flatpak step: the headline named an app not being updated, and two counts disagreed.**
+- ✅ [ONEUP-0457] **Flatpak step: the headline named an app not being updated, and two counts disagreed.**
   Seen 2026-11-25: Flatpak's table listed GNOME runtimes and Discord, but
   Spotlight's headline read org.gimp.GIMP; the Packages box read 1 of 5
   while the status line read "Updating your apps: 0 of 5". Unverified:
   one count may mean started and the other finished (ONEUP-0364). Check
   both against the code and fix or record why they are right.
+  Investigated 2026-11-26 against the run log: the engine named the
+  right apps. Both faults were the window's. (1) latest_package took the
+  last PKG line, and the last one was GIMP's `queued` line, shown while
+  Flatpak updated .Locale packs nobody listed. Now a queued line never
+  sets it, and STEP_BEGIN clears it. (2) Packages showed Flatpak's ref
+  count, the status line the listed apps started, and Spotlight redrew
+  only on a PKG line. Now handle_marker converts the count once for
+  every figure, and a Flatpak PROGRESS redraws the figures
+  (step_progress.show_figures). ONEUP-0239 §4.1 and §4.3.1 amended.
+  Regressions in gui-smoke.py, seen red on HEAD.
   **Layman:** During the Flatpak step the window named GIMP while Flatpak was updating other things, and showed both 1 of 5 and 0 of 5.
   Kind: investigate.
   Source: user-report-2026-11-25.

@@ -731,10 +731,8 @@ def _named_part(win, phase: str, n: int, total: int) -> str:
 
     The Flatpak step's passes — "Updating your apps: 3 of 12" (ONEUP-0239 §4.1.4) —
     never say downloading or installing, as Flatpak prints no such split. Their count
-    is of the listed apps where there are any (ONEUP-0364). A removal is counted
-    (ONEUP-0366); the post-transaction scripts are not (ONEUP-0363)."""
-    if phase in ("user", "system") and total:
-        n, total = _flatpak_apps(win) or (n, total)
+    arrives already of the listed apps, from `handle_marker` (ONEUP-0364). A removal is
+    counted (ONEUP-0366); the post-transaction scripts are not (ONEUP-0363)."""
     if phase == "remove":
         text = (QCoreApplication.translate("run", "Removing {n} of {total} packages")
                 if total else QCoreApplication.translate("run", "Removing packages"))
@@ -930,6 +928,8 @@ def handle_marker(win, line: str):
             "run", "{phrasing}  (step {index} of {total})").format(
                 phrasing=phrasing or key, index=index, total=total)
         win._progress_phase = ""
+        # The last step's package is not this step's (ONEUP-0457).
+        win.latest_package = None
         sync_stop(win)
         # A new step is a new thing to wait on, and its own download: carrying the
         # previous step's elapsed time or byte rate over would misreport both.
@@ -1035,8 +1035,11 @@ def handle_marker(win, line: str):
     elif tag == "PKG":
         # One package's place in a run, key|state|name|edition[|bytes[|from|repo[|change]]].
         # The latest package is set BEFORE the model notifies the layouts, and on
-        # apply's own guard, so Spotlight never names a line the model refused.
+        # apply's own guard, so Spotlight never names a line the model refused. Never a
+        # queued line: that package has not started, and the last one queued was named
+        # while Flatpak updated something else (ONEUP-0457).
         if (len(parts) >= 4 and parts[0] and parts[2] and parts[1] in packages.STATES
+                and parts[1] != "queued"
                 and (len(parts) < 5 or not parts[4] or parts[4].isdecimal())
                 and (len(parts) < 8 or not parts[7] or parts[7] in packages.CHANGES)):
             win.latest_package = (parts[0], parts[2], parts[3])
@@ -1066,6 +1069,11 @@ def handle_marker(win, line: str):
             return
         key, phase = parts[0], parts[3]
         n, total = int(parts[1]), int(parts[2])
+        if phase in ("user", "system") and total:
+            # Flatpak counts refs, .Locale packs and runtimes nobody listed among them.
+            # Every figure counts the listed apps instead, so the status line and
+            # Spotlight's Packages box agree (ONEUP-0364, ONEUP-0457).
+            n, total = _flatpak_apps(win) or (n, total)
         downloading = phase == "download"
         # What the words say (§4.1.1). `downloading` stays the line's own, for the bar.
         said = step_progress.half_of(win, key, phase)
@@ -1108,6 +1116,8 @@ def handle_marker(win, line: str):
             step_progress.remove(win, key, n, total)
         elif phase == "finish":
             step_progress.run_scripts(win, key)
+        else:
+            step_progress.show_figures(win)
         if announce:
             win._announce(_phase_announcement(said))
     elif tag == "REFRESH":

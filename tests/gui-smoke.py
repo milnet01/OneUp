@@ -2229,9 +2229,9 @@ def main() -> int:
     check("a run's queued new package reads as new",
           "fresh" in _by and package_views.versions(_by["fresh"]) == "new 1-1")
     check("a run's change word outside the four drops the line", "odd" not in _by)
-    run.handle_line(wQ, "@@PKG@@|system|queued|odd|1-1|0||Main|sideways")
-    check("and Spotlight does not name the dropped line",
-          wQ.latest_package == ("system", "plain", "2-1"))
+    # Not queued: Spotlight names no queued line at all (ONEUP-0457).
+    run.handle_line(wQ, "@@PKG@@|system|downloading|odd|1-1|0||Main|sideways")
+    check("and Spotlight does not name the dropped line", wQ.latest_package is None)
     check("a run's line with no change stays an upgrade",
           "plain" in _by and _by["plain"].change == "upgrade")
 
@@ -9190,6 +9190,29 @@ for th in theme.THEMES:
           "left" not in wT.status.text() and _left.text() == "not known")
     run.on_finished(wT, 0, None)
     _unpatch_all()
+    # ONEUP-0457, as seen 2026-11-25: Flatpak's first refs were .Locale packs nobody
+    # listed. Spotlight named the last QUEUED app, and Packages counted Flatpak's refs
+    # (1 of 5) while the status line counted listed apps (0 of 5).
+    wFs = _at_minimum("spotlight")
+    run._reset_for_run(wFs, ["system", "flatpak"], check=False)
+    run.handle_line(wFs, "@@STEP_BEGIN@@|system|1|2")
+    run.handle_line(wFs, "@@PKG@@|system|downloading|bash|5.3-1|0")
+    run.handle_line(wFs, "@@STEP_BEGIN@@|flatpak|2|2")
+    for _app in ("org.a", "org.b", "org.gimp.GIMP"):
+        run.handle_line(wFs, f"@@PKG@@|flatpak|queued|{_app}|1|0||flathub")
+    run.handle_line(wFs, "@@PROGRESS@@|flatpak|1|5|user")
+    check(f"ONEUP-0457 Spotlight names no app before one starts ({wFs.host.headline.text()!r})",
+          wFs.host.headline.text() == "")
+    check(f"ONEUP-0457 Packages counts the listed apps, as the status line does "
+          f"({wFs.host.packages_figure.text()!r}, {wFs.status.text()!r})",
+          wFs.host.packages_figure.text() == "0 of 3"
+          and wFs.status.text().endswith("Updating your apps: 0 of 3"))
+    run.handle_line(wFs, "@@PKG@@|flatpak|downloading|org.a|1|0")
+    run.handle_line(wFs, "@@PROGRESS@@|flatpak|3|5|user")
+    check(f"ONEUP-0457 and both move together once an app starts "
+          f"({wFs.host.packages_figure.text()!r}, {wFs.host.headline.text()!r})",
+          wFs.host.packages_figure.text() == "1 of 3" and wFs.host.headline.text() == "org.a")
+    run.on_finished(wFs, 0, None)
     _words = []
     for _secs, _want in ((4, "about 10 s left"), (44, "about 40 s left"),
                          (58, "about 1 min left"), (200, "about 3 min left"),
