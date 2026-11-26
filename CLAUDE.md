@@ -1,11 +1,8 @@
 # CLAUDE.md
 
-Guidance for Claude Code (claude.ai/code) when working in this repository.
-
-**This file is a map and a trap list.** Where it restates a rule, the standard is canonical
-and this file is wrong — `docs/standards/documentation.md` §1.1 ranks the set, and §1.2 holds
-the one exception that outranks the whole table. What it holds that nothing else does is §6 —
-the traps, each of which cost a real bug to learn.
+**A map and a trap list.** Where it restates a rule, the standard wins
+(`docs/standards/documentation.md` §1.1, with §1.2's one exception). §6 is what only this
+file holds.
 
 ## 1. What OneUp is
 
@@ -104,12 +101,10 @@ The four correctness invariants the test suite exists to protect — chiefly tha
 must never claim success or advise a reboot it did not earn — are
 `docs/standards/testing.md` §5. Add a regression test for any engine behaviour change.
 
-Runtime state lives in `~/.local/state/oneup/`, and four files there are a contract between
-the two halves rather than mere state: `docs/reference/marker-protocol.md` §8. `run.state`
-and `stop.request` are the original pair; `hold.state` and `go.request` were added by
-ONEUP-0044 so one engine can span the size preview and the run. (That directory follows `XDG_STATE_HOME` when it is set to an ABSOLUTE path, and falls back
-to `~/.local/state/oneup/` otherwise (ONEUP-0059) — in **both** halves, in one commit,
-because moving one side alone leaves Stop writing where the engine never looks.)
+Runtime state lives in `~/.local/state/oneup/`; four files there (`run.state`,
+`stop.request`, `hold.state`, `go.request`) are a contract between the two halves:
+`docs/reference/marker-protocol.md` §8. The directory follows an ABSOLUTE `XDG_STATE_HOME` (ONEUP-0059); change that in
+both halves in one commit, or Stop writes where the engine never looks.
 
 ## 5. Packaging & versioning
 
@@ -130,28 +125,12 @@ exists, and what the lockstep gate checks: `docs/standards/workflow.md` §5.1.
 Each of these cost a real bug. They are terse here on purpose — the reasoning, the
 measurement and the exact shape of the rule are in the document named beside each.
 
-Traps that bind one part of the code live beside it, in `.claude/rules/`. Claude Code
-loads such a file when a matching file is opened with the native Read tool; an Ants-verb read
-does not load it, so read it by hand before changing that part. Their headlines:
+Traps that bind one part of the code live beside it, in `.claude/rules/`, and load when a
+matching file is opened with the native Read tool. An Ants-verb read does not load them, so
+read the file by hand before changing that part:
 
-- `.claude/rules/engine-traps.md` — the engine, its sudo handling, markers and the engine
-  suite:
-  - Never signal the engine to stop a transaction.
-  - A privileged call must not sit inside a subshell.
-  - A run must survive the GUI going away.
-  - Nothing the engine spawns may outlive it.
-  - To bound a child, kill its process group — never the child alone.
-  - To ask "has my parent gone?", `kill -0` the pid you captured — never read `$PPID`
-    again.
-  - The suite's prompt counters cannot see a second `sudo_init` inside ONE process.
-  - A shape check on a field of codes does not catch English — check membership instead.
-  - A slow server must never be indistinguishable from a hang.
-  - Rewriting a repository URL must never touch the alias — the alias is the cache key.
-  - A privileged call added without a matching drop-in entry, or without a `rootops`
-    entry, is invisible until a passwordless user meets it.
-  - Editing the download guard's text is a re-grant for every existing user.
-- `.claude/rules/ui-traps.md` — the window:
-  - The app draws no focus ring — and the cue is DERIVED, not copied from hover.
+- `.claude/rules/engine-traps.md` — the engine, its sudo handling, markers, the engine suite.
+- `.claude/rules/ui-traps.md` — the window.
 
 The traps that bind every session stay here:
 
@@ -167,15 +146,11 @@ The traps that bind every session stay here:
   `docs/standards/workflow.md` §4.
 
 - **`ROADMAP.md` is generated output — do not hand-edit it.** The Ants roadmap store is the
-  source of truth. Every `roadmap_log` write renders
-  all of it from the store over the file, so a hand edit survives only until the next write
-  and then vanishes with no error and no diff to explain it. Use `roadmap_log`
-  (`append` / `flip` / `annotate`); read with `roadmap_query`, which answers `source:"store"`.
-  Two consequences that are not visible in the file. **`roadmap_log op:"amend_headline"` no
-  longer works here** — it refuses with `unsupported_format`, because the headline is a store
-  column and its locate key; to change one, edit the store. And **the store is machine-global**
-  (`~/.local/share/ants-terminal/roadmap.sqlite`), not in this repo, so a fresh clone has the
-  markdown and not the history behind it. Recorded on `ONEUP-0057`.
+  source of truth; every `roadmap_log` write re-renders the file, silently dropping a hand
+  edit. Write with `roadmap_log`, read with `roadmap_query`. `op:"amend_headline"` refuses
+  here (`unsupported_format`): a headline is a store column, so change it in the store. The
+  store is machine-global (`~/.local/share/ants-terminal/roadmap.sqlite`), so a fresh clone
+  has the markdown without its history. Recorded on `ONEUP-0057`.
 
 - **A gated document's `Reviewed` stamp can stand over text no review read, and nothing in
   the file says so.** Another item's edit can re-arm the gate, and the next session then
@@ -186,7 +161,5 @@ The traps that bind every session stay here:
 
 ## 7. Where this file's history went
 
-Dated corrections, superseded wording and the argument that settled a rule are in
-[`docs/history/claude-md.md`](docs/history/claude-md.md). Nothing there is a rule. A trap's
-own measurement is not history and stays above: a trap without its evidence is advice, and
-the next session argues with advice.
+[`docs/history/claude-md.md`](docs/history/claude-md.md) — dated corrections; no rules. A
+trap's own measurement stays above: without its evidence a trap is advice.
