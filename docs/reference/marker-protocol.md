@@ -187,7 +187,10 @@ The marker that stops a working download looking like a hang (ONEUP-0040/0048).
   "Downloading packages — 37 so far" — never as an invented denominator. Zypper's parallel
   prefetch (`Preloading:`) reports no counter at all.
 - **The two byte fields are optional**, present only in the download phase once zypper has
-  printed a size. **`bytes_total` of 0 means "not known yet."** Throughout the download phase the
+  printed a size, and in a Flatpak `user` or `system` pass whose table printed sizes. There
+  `bytes_total` is the sum of Flatpak's per-ref upper bounds and `bytes` an estimate:
+  each bound times its ref's percentage, a ref already passed counting whole. A changed
+  estimate sends the count again (ONEUP-0456). **`bytes_total` of 0 means "not known yet."** Throughout the download phase the
   window also weighs `/var/cache/zypp/packages` itself — world-readable, so no root is
   involved — and shows whichever figure is larger, never more than `bytes_total`.
 - The engine derives all of this by parsing zypper's own output, which is why `LC_ALL=C` is

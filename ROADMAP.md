@@ -12996,7 +12996,7 @@ when complete (that document's §7).
   Source: user-report-2026-11-25.
   Lanes: gui.
 
-- 📋 [ONEUP-0456] **Show Flatpak download sizes: a running estimate against Flatpak's upper bound.**
+- ✅ [ONEUP-0456] **Show Flatpak download sizes: a running estimate against Flatpak's upper bound.**
   User decision 2026-11-25: estimate progress, not just "up to". Flatpak's
   table prints a size per ref as "< 391.7 MB", an UPPER bound (it often
   fetches less through deltas). _flatpak_pass reads the table for the ref
@@ -13005,6 +13005,18 @@ when complete (that document's §7).
   percentage, label the total as an upper bound. Amends ONEUP-0239 §4.1.4
   (a Flatpak pass moves neither half) and marker-protocol.md's PROGRESS
   byte fields for the flatpak step.
+  Built 2026-11-26. parsers.flatpak_bound reads each table row's "< N
+  MB" (SI units; the host's Flatpak prints a NO-BREAK SPACE before the
+  unit, found by replaying the 2026-11-25 log) and flatpak_percent the
+  per-ref percentage. _flatpak_pass sends
+  PROGRESS|flatpak|n|m|pass|estimate|bound, again only when the estimate
+  moves. The window shows "X of up to Y" in the status line and
+  Spotlight's Downloaded box; each phase starts from no figure; bars
+  stay busy. Replayed on the real log: a user pass of 2.36 GB bound.
+  Known limit: a ref Flatpak finishes by a small delta counts its whole
+  bound, so the estimate runs ahead of the real bytes; ONEUP-0291's
+  exact sizes would fix that. ONEUP-0239 §4.1.4, §4.3.1, INV-19 and
+  marker-protocol.md §4.3 amended.
   **Layman:** During the Flatpak step, OneUp will show roughly how much has downloaded out of the most Flatpak says it might need.
   Kind: feature.
   Source: user-report-2026-11-25.

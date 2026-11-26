@@ -228,11 +228,19 @@ def _flatpak_pass(phase: str, rows: list[FlatpakRow]
     Flatpak numbers its refs in a table first, and `Updating N/M…` starts ref N, so
     a listed app is `downloading` from its start and `downloaded` once the next ref
     starts or the pass ends (ONEUP-0364). A ref nobody listed names no app.
+
+    Where the table gives sizes, each count also carries bytes: the sum of every
+    ref's upper bound, and an estimate of what has come down — each ref's bound times
+    its percentage, a ref already passed counting whole. A changed estimate sends the
+    count again (ONEUP-0456).
     """
     markers.marker("PROGRESS", "flatpak", 0, 0, phase)
     listed = {row.app: row for row in rows}
     refs: dict[int, str] = {}
+    bounds: dict[int, int] = {}
+    percent: dict[int, int] = {}
     last: tuple[int, int] | None = None
+    sent: tuple[int, int, int] | None = None
     current: FlatpakRow | None = None
 
     def end() -> None:
@@ -242,13 +250,16 @@ def _flatpak_pass(phase: str, rows: list[FlatpakRow]
             current = None
 
     def read(line: str) -> None:
-        nonlocal last, current
+        nonlocal last, sent, current
         row = parsers.flatpak_table_row(line)
         if row is not None:
             refs[row[0]] = row[1]
+            bounds[row[0]] = parsers.flatpak_bound(line)
             return
         count = parsers.flatpak_count(line)
-        if count is not None and count != last:
+        if count is None:
+            return
+        if count != last:
             last = count
             end()
             current = listed.get(refs.get(count[0], ""))
@@ -256,7 +267,18 @@ def _flatpak_pass(phase: str, rows: list[FlatpakRow]
             # redraws on PROGRESS.
             if current is not None:
                 markers.marker("PKG", "flatpak", "downloading", current.app, current.version, 0)
-            markers.marker("PROGRESS", "flatpak", count[0], count[1], phase)
+            for passed in range(1, count[0]):
+                percent[passed] = 100
+        share = parsers.flatpak_percent(line)
+        if share is not None:
+            percent[count[0]] = share
+        total = sum(bounds.values())
+        got = sum(size * percent.get(ref, 0) // 100 for ref, size in bounds.items())
+        if (count[0], count[1], got) == sent:
+            return
+        sent = (count[0], count[1], got)
+        markers.marker("PROGRESS", "flatpak", count[0], count[1], phase,
+                       *((got, total) if total else ()))
     return read, end
 
 

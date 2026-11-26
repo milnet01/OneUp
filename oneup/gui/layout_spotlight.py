@@ -200,8 +200,16 @@ class SpotlightLayout(LayoutHost):
                 "layout_spotlight", "{n} so far").format(n=i18n.number(done)))
         else:
             self.packages_figure.setText(unknown)
-        self.downloaded_figure.setText(_of(format_size(win._dl_got), format_size(win._dl_total))
-                                if win._dl_total else unknown)
+        if not win._dl_total:
+            self.downloaded_figure.setText(unknown)
+        elif step_progress.shown_phase(win) in step_progress.FLATPAK_PASSES:
+            # An estimate against Flatpak's upper bound (ONEUP-0456).
+            self.downloaded_figure.setText(QCoreApplication.translate(
+                "layout_spotlight", "{part} of up to {whole}").format(
+                part=format_size(win._dl_got), whole=format_size(win._dl_total)))
+        else:
+            self.downloaded_figure.setText(_of(format_size(win._dl_got),
+                                               format_size(win._dl_total)))
         self.time_left_figure.setText(step_progress.time_left(win) or unknown)
 
     def _latest(self):

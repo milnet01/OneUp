@@ -6,6 +6,10 @@ All notable changes to OneUp are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **During the Flatpak step, OneUp shows roughly how much has downloaded, out of the most Flatpak says it might need.** (ONEUP-0456)
+
 ### Changed
 
 - **The terminal fallback's `--help` lists `--hold` and `--emit-guard` as internal options** (ONEUP-0435)

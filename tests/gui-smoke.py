@@ -9213,6 +9213,25 @@ for th in theme.THEMES:
           f"({wFs.host.packages_figure.text()!r}, {wFs.host.headline.text()!r})",
           wFs.host.packages_figure.text() == "1 of 3" and wFs.host.headline.text() == "org.a")
     run.on_finished(wFs, 0, None)
+    # ONEUP-0456: a Flatpak pass's bytes are an estimate against Flatpak's upper bound,
+    # worded as one; the next pass starts from nothing.
+    wFb = _at_minimum("spotlight")
+    run._reset_for_run(wFb, ["flatpak"], check=False)
+    wFb._liveness_active = True
+    run.handle_line(wFb, "@@STEP_BEGIN@@|flatpak|1|1")
+    run.handle_line(wFb, "@@PROGRESS@@|flatpak|0|0|user")
+    run.handle_line(wFb, "@@PROGRESS@@|flatpak|1|2|user|500000|4000000")
+    check(f"ONEUP-0456 the status line gives the Flatpak estimate as one ({wFb.status.text()!r})",
+          wFb.status.text().endswith("Updating your apps: 1 of 2 · 488.3 KiB of up to 3.8 MiB"))
+    check(f"ONEUP-0456 and so does Spotlight's Downloaded box "
+          f"({wFb.host.downloaded_figure.text()!r})",
+          wFb.host.downloaded_figure.text() == "488.3 KiB of up to 3.8 MiB")
+    run.handle_line(wFb, "@@PROGRESS@@|flatpak|0|0|system")
+    check(f"ONEUP-0456 the next pass does not inherit the figure "
+          f"({wFb.status.text()!r}, {wFb.host.downloaded_figure.text()!r})",
+          "up to" not in wFb.status.text()
+          and wFb.host.downloaded_figure.text() == "not known")
+    run.on_finished(wFb, 0, None)
     _words = []
     for _secs, _want in ((4, "about 10 s left"), (44, "about 40 s left"),
                          (58, "about 1 min left"), (200, "about 3 min left"),

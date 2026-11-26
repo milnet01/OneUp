@@ -33,12 +33,16 @@ def to_bytes(number: str, unit: str) -> int:
     reaches the window inside `@@PROGRESS@@`. The Bash engine keeps one digit, which
     read zypper's "1.75 GiB" as 1.7 GiB (ONEUP-0335).
     """
+    return _scaled(number, _UNITS.get(unit))
+
+
+def _scaled(number: str, mult: int | None) -> int:
+    """`number` times `mult`, exactly, or 0 when either cannot be read."""
     whole, dot, frac = number.partition(".")
     if not dot:
         frac = "0"
     if not _WHOLE.fullmatch(whole) or not _WHOLE.fullmatch(frac):
         return 0
-    mult = _UNITS.get(unit)
     if mult is None:
         return 0
     scale = 10 ** len(frac)
@@ -206,6 +210,31 @@ def flatpak_table_row(line: str) -> tuple[int, str] | None:
     """
     found = _FLATPAK_ROW.match(line)
     return (int(found.group(1)), found.group(2)) if found else None
+
+
+# A table row's last column: the most that ref may download, in SI units, sometimes
+# followed by "(partial)" — "< 391.7 MB", "< 386.5 MB (partial)", "< 12.0 kB" in the
+# host's run logs of 2026-10 and 2026-11. Flatpak often fetches less, through deltas.
+# The space before the unit is a NO-BREAK SPACE in those logs (U+00A0), so `\s`.
+_FLATPAK_BOUND = re.compile(r"\t<\s*([0-9]+(?:\.[0-9]+)?)\s(bytes|kB|MB|GB|TB)"
+                            r"(?:\s\(partial\))?\s*$")
+_SI_UNITS = {"bytes": 1, "kB": 10**3, "MB": 10**6, "GB": 10**9, "TB": 10**12}
+
+
+def flatpak_bound(line: str) -> int:
+    """The upper bound in bytes a row of Flatpak's table gives its ref, or 0."""
+    found = _FLATPAK_BOUND.search(line)
+    return _scaled(found.group(1), _SI_UNITS[found.group(2)]) if found else 0
+
+
+# The percentage on a count line, `Updating 5/5… ██▏   11%  4.4 MB/s`: of that ref alone.
+_FLATPAK_PERCENT = re.compile(r"….*?([0-9]{1,3})%")
+
+
+def flatpak_percent(line: str) -> int | None:
+    """How far, in percent, the ref a count line names has got, or None."""
+    found = _FLATPAK_PERCENT.search(line)
+    return min(int(found.group(1)), 100) if found else None
 
 
 # zypper's per-package counter, `( 7/48) Removing: …`. Only the counter is read: a

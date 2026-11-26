@@ -769,7 +769,11 @@ def _phase_announcement(phase: str) -> str:
 
 
 def _byte_figure(win) -> str:
-    """How much has come down, of how much — download half only (ONEUP-0239 §4.1.1)."""
+    """How much has come down, of how much — download half only (ONEUP-0239 §4.1.1),
+    or in a Flatpak pass an estimate of up to Flatpak's bound (ONEUP-0456)."""
+    if step_progress.shown_phase(win) in step_progress.FLATPAK_PASSES and win._dl_total:
+        return QCoreApplication.translate("run", "{got} of up to {total}").format(
+            got=markers.format_size(win._dl_got), total=markers.format_size(win._dl_total))
     if step_progress.shown_phase(win) != "download" or not win._dl_got:
         return ""
     got = markers.format_size(win._dl_got)
@@ -838,6 +842,8 @@ def _tick_activity(win, reweigh: bool = True):
             # (609.1 of 609.0 MiB, seen 2026-11-25): capped like the weight (ONEUP-0455).
             got = min(got, win._dl_total)
         win._dl_got = got
+    elif win._progress_phase in step_progress.FLATPAK_PASSES:
+        win._dl_got = got           # the engine's estimate, never past its bound (ONEUP-0456)
     win._dl_rate = 0.0
     if got > 0:
         human = markers.format_size(got)
@@ -1069,7 +1075,7 @@ def handle_marker(win, line: str):
             return
         key, phase = parts[0], parts[3]
         n, total = int(parts[1]), int(parts[2])
-        if phase in ("user", "system") and total:
+        if phase in step_progress.FLATPAK_PASSES and total:
             # Flatpak counts refs, .Locale packs and runtimes nobody listed among them.
             # Every figure counts the listed apps instead, so the status line and
             # Spotlight's Packages box agree (ONEUP-0364, ONEUP-0457).
@@ -1082,6 +1088,10 @@ def handle_marker(win, line: str):
         # 141 packages would bury everything else, but silence through the run's
         # longest stretch is exactly what made it look hung.
         announce = said != step_progress.shown_phase(win)
+        if key == "flatpak" and phase != win._progress_phase:
+            # Each Flatpak pass has its own bound and estimate (ONEUP-0456): one pass's
+            # figure must not carry into the next.
+            win._dl_at = win._dl_from = win._dl_bytes = win._dl_total = win._dl_got = 0
         # Set the phase FIRST, before the byte fields and the redraw below: the
         # liveness line's cache-weighing fallback is gated on it, so a stale phase
         # would skip the very first measurement.
@@ -1092,7 +1102,8 @@ def handle_marker(win, line: str):
         win._activity_since = 0.0
         sync_stop(win)
         # Optional trailing byte fields: how much zypper says has come down, and its
-        # total for the transaction. Either may be 0 for "not known" — during the
+        # total for the transaction; in a Flatpak pass, the engine's estimate and
+        # Flatpak's upper bound (ONEUP-0456). Either may be 0 for "not known" — during the
         # prefetch phase zypper reports no sizes at all, and the liveness line falls
         # back to weighing the package cache (the phase, set above, gates that).
         if len(parts) > 4 and parts[4].isdecimal():

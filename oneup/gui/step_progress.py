@@ -110,6 +110,11 @@ def half_of(win, key: str, phase: str) -> str:
     return "install" if phase == "download" and value is not None and value > HALF else phase
 
 
+# The Flatpak step's two update passes (ONEUP-0239 §4.1.4). Their bytes are an
+# estimate against Flatpak's upper bound, so the figure reads "of up to" (ONEUP-0456).
+FLATPAK_PASSES = ("user", "system")
+
+
 def shown_phase(win) -> str:
     """The running step's phase, as `half_of` words it."""
     return half_of(win, win.current_step, win._progress_phase)

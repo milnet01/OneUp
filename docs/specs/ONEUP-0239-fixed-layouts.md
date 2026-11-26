@@ -375,7 +375,12 @@ each, with a `phase` of its own:
   apps."*, *"Removing unused Flatpak runtimes."* The step's bar and `win.bar` stay busy,
   and its badge keeps its `IN_PROGRESS` phrase (§4.1.1). Stop stays clickable:
   `run.sync_stop` greys it only in the `install`, `remove` and `finish` phases
-  (ONEUP-0363, ONEUP-0366). There is no byte figure and no time left (§4.1.2).
+  (ONEUP-0363, ONEUP-0366). There is no time left (§4.1.2).
+- *(ONEUP-0456)* **Where Flatpak's table printed sizes, each count carries bytes**
+  (`docs/reference/marker-protocol.md` §4.3): the sum of the refs' upper bounds, and an
+  estimate from each ref's percentage. A changed estimate sends the count again. The
+  status line and Spotlight's *Downloaded* box then read *"488.3 KiB of up to 3.8 MiB"*;
+  each pass, and the `unused` pass, starts from no figure. The bars stay busy.
 
 ### 4.2 Sizes come from the font, never from the content
 
@@ -512,7 +517,8 @@ first action line, or at the pass's end. So it leaves *now* while it waits to in
   carries its list's count. ~~Its three figures are *Downloaded*, *Installed* and
   *Download*.~~ *(ONEUP-0306)* Its three figure boxes read from the running step's last
   `PROGRESS`: *Packages* is its `done` of `total`, in the half the badge names;
-  *Downloaded* is §4.1.1's byte figure of `bytes_total`, printed with `format_size`;
+  *Downloaded* is §4.1.1's byte figure of `bytes_total`, printed with `format_size`, and
+  *"of up to"* in a Flatpak pass (§4.1.4);
   *Time left* is §4.1.2's estimate. A box whose figure is not known reads *"not known"*.
   *(ONEUP-0322)* With a `total` of 0, *Packages* shows the running tally, *"37 so far"*
   (`docs/reference/marker-protocol.md` §4.3). In a Flatpak pass, *Packages* counts the listed apps
@@ -804,6 +810,9 @@ any other. Large type grows by `_FONT_SCALE` entries, never by a fixed size.
   *Breaks when:* a line's size follows its text's width (ONEUP-0312).
 
 - **INV-19** *(ONEUP-0336)* The engine names each Flatpak pass, once per count.
+  *(ONEUP-0456)* Where the table printed sizes, a count is sent again when its byte
+  estimate moves, and never otherwise; `tests/run-tests.sh`'s ONEUP-0456 scenario
+  holds the sequence.
   *Test:* `tests/run-tests.sh` — a mock `flatpak` whose user update prints
   `Updating 1/2…` twice, then `Updating 2/2…`, whose system update prints
   `Updating 1/1…`, and whose unused uninstall prints `Uninstalling 1/1…`. The output
@@ -999,3 +1008,4 @@ count. *(ONEUP-0335)* No marker change; the engine changes in `parsers.PackageLi
 | 0362-amend | 2026-11-04 | none — an authoring amendment; no reviewer was dispatched, and none is owed | ONEUP-0362: §4.3.2 drops a narrow block's own outline, draws one round the strip, and narrows overflowing blocks to half the strip. The user chose this of three options on 2026-11-04. It records code verified in the same change, and this spec is past its two review loops. |
 | 0363-0364-0366-amend | 2026-11-04 | none — an authoring amendment; no reviewer was dispatched, and none is owed | §4.1.1 adds the leftover step's `remove` phase and the system step's `finish` phase; §4.1.4 counts the listed Flatpak apps where there are any, and greys Stop in all three transaction phases. No invariant changed: INV-20's test lists no apps, so it still reads Flatpak's own count. It records code verified in the same change, and the user approved the marker change on 2026-11-04. |
 | 0457-amend | 2026-11-26 | none — an authoring amendment; no reviewer was dispatched, and none is owed | ONEUP-0457, from the user's run of 2026-11-25: §4.1's `latest_package` skips a `queued` line and `STEP_BEGIN` clears it, and §4.3.1's *Packages* box counts a Flatpak pass's listed apps, as the status line already did. Written with the code and its test |
+| 0456-amend | 2026-11-26 | none — an authoring amendment; no reviewer was dispatched, and none is owed | ONEUP-0456, the user's decision of 2026-11-25: §4.1.4 gives a Flatpak pass bytes (the sum of Flatpak's upper bounds and a percentage estimate), shown *"of up to"* in the status line and §4.3.1's *Downloaded* box; INV-19 adds that a moved estimate re-sends the count. The bars still stay busy. Written with the code and its tests |

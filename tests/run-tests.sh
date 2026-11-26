@@ -3941,6 +3941,34 @@ check_eq "the passes and counts arrive in order, once each" \
          "$(grep -F '@@PROGRESS@@|flatpak|' <<<"$out" | sed 's/^@@PROGRESS@@|flatpak|//' | xargs)"
 rm -rf "$d"
 
+# ONEUP-0456: where Flatpak's table gives each ref's upper bound, every count carries
+# bytes: the sum of the bounds, and each bound times its ref's percentage, a ref already
+# passed counting whole. A changed estimate sends the count again; a repeat sends nothing.
+# A pass whose table gives no sizes sends no bytes.
+echo "TEST: a Flatpak pass sends an estimate against Flatpak's upper bound (ONEUP-0456)"
+d=$(mktemp -d); setup_common "$d"
+cat > "$d/flatpak" <<'EOF'
+#!/usr/bin/env bash
+row() { printf ' %s.\t   \t%s\tstable\tu\tflathub\t< %s\n' "$1" "$2" "$3"; }
+case "$*" in
+  *remotes*)                      printf 'flathub\t\n'; exit 0 ;;
+  *remote-ls*--updates*--user*)   printf 'org.x.App 1\n'; exit 0 ;;
+  *remote-ls*--updates*--system*) printf 'org.z.App 3\n'; exit 0 ;;
+  *update*--user*)
+    printf '\n'; row 1 org.x.App.Locale $'1.0\xc2\xa0MB'; row 2 org.x.App $'3.0\xc2\xa0MB (partial)'; printf '\n'
+    printf 'Updating 1/2…\nUpdating 1/2… ██   50%%  1 MB/s\nUpdating 1/2… ██   50%%\n'
+    printf 'Updating 2/2… ▍   10%%\n'; exit 0 ;;
+  *update*--system*) printf 'Updating 1/1…\n'; exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$d/flatpak"
+out=$(run_engine "$d" --steps=flatpak)
+check_eq "each count carries the estimate and the bound, and sends again only when it moves" \
+         "0|0|user 1|2|user|0|4000000 1|2|user|500000|4000000 2|2|user|1300000|4000000 0|0|system 1|1|system 0|0|unused" \
+         "$(grep -F '@@PROGRESS@@|flatpak|' <<<"$out" | sed 's/^@@PROGRESS@@|flatpak|//' | xargs)"
+rm -rf "$d"
+
 # ONEUP-0364: Flatpak numbers its refs in a table before updating, then prints
 # "Updating N/M…" as ref N starts — so each listed app can be named as it goes.
 # The table's layout is the host's, 2026-11-04: tab-separated, the second column

@@ -669,6 +669,26 @@ def main() -> int:
                        ("   org.freedesktop.Platform 24.08 is no longer receiving fixes.", None)):
         check(f"flatpak_table_row({line[:20]!r}…)", parsers.flatpak_table_row(line), want)
 
+    # ONEUP-0456: each row's upper bound, in SI units, in the shapes the host's run logs
+    # hold, with the NO-BREAK SPACE they print before the unit; a row with no size
+    # column is 0, never a guess.
+    for line, want in ((" 1.\t   \torg.gnome.Platform.Locale\t51\tu\tflathub\t< 391.7\u00a0MB",
+                        391_700_000),
+                       (" 2.\t   \torg.gnome.Platform.Locale\t50\tu\tflathub"
+                        "\t< 386.5\u00a0MB (partial)",
+                        386_500_000),
+                       (" 3.\t   \torg.kde.Sdk\t6.11\tu\tflathub\t< 1.2\u00a0GB", 1_200_000_000),
+                       (" 4.\t   \torg.example.Tiny\tstable\tu\tflathub\t< 12.0 kB", 12_000),
+                       (" 5.\t   \torg.example.Gone\tstable\tr\tflathub\tr", 0),
+                       ("Updating 1/5…", 0)):
+        check(f"flatpak_bound({line[-22:]!r})", parsers.flatpak_bound(line), want)
+    for line, want in (("Updating 5/5… ██▏                   11%  4.4 MB/s", 11),
+                       ("Updating 1/5… ████████████████████ 100%  2.7 kB/s", 100),
+                       ("Updating 1/5…                        0%", 0),
+                       ("Updating 1/5…", None),
+                       ("Downloading 42% of something", None)):
+        check(f"flatpak_percent({line[:30]!r}…)", parsers.flatpak_percent(line), want)
+
     # The caller passes whole captured output, not one line: the first MATCHING
     # line wins, and lines before it must not stop the search.
     check("download_size skips non-matching lines and takes the first hit",
