@@ -12759,7 +12759,7 @@ when complete (that document's §7).
   Kind: chore.
   Source: verify-delivery-2026-11-15.
 
-- 📋 [ONEUP-0441] **Turning passwordless on or off asks for the password in a box that says it is for updating.**
+- ✅ [ONEUP-0441] **Turning passwordless on or off asks for the password in a box that says it is for updating.**
   Found closing ONEUP-0416. With passwordless live, grant_auth and
   revoke_auth skip sudo_init's labelled validate (it returns on
   auth_current), so their first sudo call asks through the askpass
@@ -12770,6 +12770,11 @@ when complete (that document's §7).
   it (privilege.py), and wording per wording-and-translation.md.
   Not fixed now: it is wording, not a failure, and the label needs a
   decision on what it says.
+  Fixed 2026-11-26: privilege.ask_as labels every prompt of a grant or
+  revoke run, the validate and the rest: "...to turn Passwordless on." /
+  "...off.". The text before %p is the same as the update prompts', so
+  the askpass reaper already matches it. Regression: run-tests.sh's
+  prompt-label scenario, seen red on HEAD.
   **Layman:** When you switch password-free updates off, the password box says OneUp wants it "to continue updating", which is not what you are doing.
   Kind: ux.
   Source: close-findings-2026-11-15 (from ONEUP-0416).
@@ -12875,7 +12880,7 @@ when complete (that document's §7).
   Kind: review-fix.
   Source: close-findings-2026-11-18 (from ONEUP-0426).
 
-- 📋 [ONEUP-0449] **The skip-repo route still accepts a repository alias spelled as a number.**
+- ✅ [ONEUP-0449] **The skip-repo route still accepts a repository alias spelled as a number.**
   Found by ONEUP-0427's lane 08 sweep (2026-11-18). zypper reads a
   repository argument as an alias or as its list NUMBER (the review
   checked `zypper lr 1`). The repository editor now refuses an all-digit
@@ -12887,6 +12892,11 @@ when complete (that document's §7).
   share one character class, so the fix is both guards and that spec
   together. Whether zypper tries the alias or the number first is not
   verified; refusing is fail-closed either way.
+  Fixed 2026-11-26: engine repos.valid_alias and the window's REMEDY
+  skip-repo check (now repos.alias_ok, renamed from _alias_ok) refuse an
+  all-digit alias. ONEUP-0025's alias bullet says so; the frozen Bash
+  fallback is unchanged. Regressions in run-tests.sh and gui-smoke.py,
+  both seen red on HEAD.
   **Layman:** A software source whose short name is a number could, in a rare case, make OneUp switch off the wrong source while it sets a broken one aside.
   Kind: security.
   Source: review-code-2026-11-15.

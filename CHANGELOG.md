@@ -12,6 +12,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **Turning Passwordless on or off now asks for the password in a box that says so, not one saying it is for updating.** (ONEUP-0441)
+
 - **The system update no longer fails when the desktop's updater (PackageKit) wakes up during a run** (ONEUP-0458)
   A zypper step that finds the package lock taken now waits for the other
   program to finish, up to three and a half minutes, and then runs again.
@@ -41,6 +43,10 @@ All notable changes to OneUp are documented here. The format follows
 
 - **"What's new" shows the newest release notes from the top** (ONEUP-0454)
   The notes used to open scrolled to the end.
+
+### Security
+
+- **Setting a broken software source aside now refuses a source whose short name is a number, which zypper could read as a different source's place in its list.** (ONEUP-0449)
 
 ## [2.1.0] - 2026-11-23
 
