@@ -164,6 +164,16 @@ OPS: dict[str, Op] = {
     "cache-size": Op({}, _cache_size),
 }
 
+# The run's ops that run zypper, where exit 7 means another program held the package
+# lock and nothing ran (ZYPPER_EXIT_ZYPP_LOCKED, man zypper). `privilege.root` waits
+# that out and runs the op again (ONEUP-0458). Not `check-dry-run`: a check never
+# waits for the lock (ONEUP-0329 §6). The suite checks this against the argvs.
+LOCK_RETRY_OPS = frozenset({
+    "size-dry-run", "plan-dry-run", "system-download", "system-commit",
+    "repo-refresh", "repo-refresh-all", "repo-disable", "repo-enable", "restart-list",
+    "orphans-unneeded", "orphans-orphaned", "orphans-remove", "cache-clean",
+})
+
 
 def _short(text: str) -> bool:
     return len(text.encode("utf-8", "surrogateescape")) <= MAX_STRING_BYTES

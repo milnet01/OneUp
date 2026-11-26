@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=457 -->
+<!-- ants-roadmap-id-high-water: ONEUP=458 -->
 
 # OneUp Roadmap
 
@@ -13007,3 +13007,22 @@ when complete (that document's §7).
   Kind: investigate.
   Source: user-report-2026-11-25.
   Lanes: gui, engine.
+
+- ✅ [ONEUP-0458] **The system update fails when PackageKit wakes up mid-run and takes the package lock.**
+  Measured from the 2026-11-26 08:54 run and the system journal. PackageKit
+  was not running at start, so the lock check passed. At 08:54:30
+  Discover's notifier woke PackageKit over D-Bus (refresh-cache,
+  get-updates) during the 41 s snapshot list. Every repo refresh, the
+  plan dry run and the download then exited 7 (ZYPPER_EXIT_ZYPP_LOCKED)
+  within one second, and the system step failed in 3 s. PackageKit quit
+  at 08:55:10. Fix: a zypper root op that exits 7 waits for the lock
+  holder (bounded by BUSY_WAIT_SECONDS, Stop-aware) and runs again; once a
+  wait gives up, later ops do not wait again.
+  Fixed 2026-11-26: privilege.root retries a rootops.LOCK_RETRY_OPS op
+  that exits 7 after waiting out the holder; five engine scenarios, red
+  on HEAD. Reaches the user's desktop once released and installed (the
+  host runs the packaged copy).
+  **Layman:** If the desktop's own updater starts checking while OneUp runs, OneUp now waits for it to finish instead of failing.
+  Kind: fix.
+  Source: user-report-2026-11-26.
+  Evidence: /home/ants/Pictures/Screenshots/Screenshot_20261126_111718.png, /home/ants/.local/state/oneup/logs/2026-11-26_085404.log

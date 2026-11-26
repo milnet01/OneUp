@@ -404,7 +404,73 @@ def root(op: str, args: dict[str, object] | None = None, *, flags: Sequence[str]
     route the service builds it and `flags`, which are sudo's own, do not apply. A
     refused argument runs nothing and returns 1 with one line saying why — the
     shape of any other failed root command, so no caller needs a second error path.
+
+    A zypper op that found the package lock held waits for it and runs again
+    (`_wait_out_lock`, ONEUP-0458).
     """
+    from . import rootops  # deferred: rootops reads this module's argvs
+    unnamed_retry_left = True
+    for attempt in range(_LOCK_RETRIES + 1):
+        rc, out = _root_once(op, args, flags=flags, merge_stderr=merge_stderr,
+                             stream=stream, on_line=on_line)
+        if (rc != _ZYPP_LOCKED or op not in rootops.LOCK_RETRY_OPS
+                or attempt == _LOCK_RETRIES):
+            break
+        waited = _wait_out_lock()
+        if waited is None and unnamed_retry_left:
+            unnamed_retry_left = False      # no holder to name: one more try only
+        elif not waited:
+            break
+    return rc, out
+
+
+# zypper's exit when another program holds the package lock and nothing ran
+# (ZYPPER_EXIT_ZYPP_LOCKED, man zypper). The run's start checks the lock, but
+# PackageKit can wake later: on 2026-11-26 Discover's notifier started it 26 s
+# into a run, and every refresh, the dry run and the download exited 7 at once.
+_ZYPP_LOCKED = 7
+_LOCK_RETRIES = 3                # PackageKit ran three transactions in 23 s
+_LOCK_WAIT_GAVE_UP = False      # once a wait times out, later ops fail at once
+
+
+def _wait_out_lock() -> bool | None:
+    """Wait for the package lock to come free, and say whether to run the op again.
+
+    True: a named holder let go. None: no holder could be named, so the lock is
+    free or unreadable and only one more try is worth making. False: give up.
+    Bounded by `BUSY_WAIT_SECONDS` and ended at once by Stop. A wait that times
+    out is not repeated for the rest of the run, so a lock held for good costs
+    one wait, not one per repository.
+    """
+    global _LOCK_WAIT_GAVE_UP
+    from . import repos, runstate  # deferred: repos imports this module
+    if _LOCK_WAIT_GAVE_UP or runstate.stop_since_begun():
+        return False
+    holder = repos.lock_holder()
+    named = bool(holder)
+    if holder:
+        pid, _, name = holder.partition(" ")
+        markers.out(f"Waiting for {name or 'another program'} (process {pid}) "
+                    "to finish with the package manager…")
+    give_up = time.monotonic() + BUSY_WAIT_SECONDS
+    while holder and time.monotonic() < give_up:
+        time.sleep(BUSY_POLL_SECONDS)
+        if runstate.stop_since_begun():
+            return False
+        holder = repos.lock_holder()
+    if holder:
+        _LOCK_WAIT_GAVE_UP = True
+        return False
+    # A holder between two transactions (PackageKit runs them back to back)
+    # needs a moment before the next attempt.
+    time.sleep(BUSY_POLL_SECONDS)
+    return True if named else None
+
+
+def _root_once(op: str, args: dict[str, object] | None, *, flags: Sequence[str],
+               merge_stderr: bool, stream: bool,
+               on_line: Callable[[str], None] | None) -> tuple[int, str]:
+    """One attempt at `root`'s operation, on whichever route the run chose."""
     from . import rootops, route  # deferred: rootops reads this module's argvs
     if chosen_route() == route.SERVICE:
         return _service_root(op, args, flags=flags, merge_stderr=merge_stderr,

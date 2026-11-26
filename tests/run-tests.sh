@@ -6293,6 +6293,66 @@ text = out.getvalue()
 ok = rc == 0 and "@@DONE@@|stopped" in text and "busy" not in text
 raise SystemExit(0 if ok else f"rc={rc} out={text[-200:]!r}")'
 
+# ONEUP-0458: Discover woke PackageKit 26 s into a run (2026-11-26), after the start's
+# lock check, and every refresh, the dry run and the download exited 7 at once.
+echo "TEST: a zypper op that meets the package lock waits it out and runs again (ONEUP-0458)"
+LOCK_RETRY_STUBS='
+import contextlib, io
+from oneup.engine import privilege, repos, route
+privilege.chosen_route = lambda: route.SUDO
+privilege.BUSY_POLL_SECONDS = 0.01
+calls = []
+def locked_once(argv, **_kw):
+    calls.append(argv)
+    return (7, "") if len(calls) == 1 else (0, "")
+privilege.sudo = locked_once
+out = io.StringIO()'
+py_case "locked once, then free: the op runs twice and succeeds" "$LOCK_RETRY_STUBS"'
+holders = iter(["9915 packagekitd", "9915 packagekitd", None])
+repos.lock_holder = lambda: next(holders, None)
+with contextlib.redirect_stdout(out):
+    rc, _ = privilege.root("cache-clean")
+ok = rc == 0 and len(calls) == 2 and "packagekitd (process 9915)" in out.getvalue()
+raise SystemExit(0 if ok else f"rc={rc} calls={len(calls)} out={out.getvalue()!r}")'
+py_case "a lock with no holder to name gets one more try, not three" "$LOCK_RETRY_STUBS"'
+privilege.sudo = lambda argv, **_kw: (calls.append(argv), (7, ""))[1]
+repos.lock_holder = lambda: None
+rc, _ = privilege.root("cache-clean")
+raise SystemExit(0 if rc == 7 and len(calls) == 2 else f"rc={rc} calls={len(calls)}")'
+py_case "a check never waits for the lock, nor does a non-zypper op" "$LOCK_RETRY_STUBS"'
+repos.lock_holder = lambda: None
+for op in ("check-dry-run", "flatpak-system-update"):
+    calls.clear()
+    rc, _ = privilege.root(op)
+    if rc != 7 or len(calls) != 1:
+        raise SystemExit(f"{op}: rc={rc} calls={len(calls)}")'
+py_case "a wait that times out is not repeated for the next op" "$LOCK_RETRY_STUBS"'
+import time
+privilege.BUSY_WAIT_SECONDS = 0.1
+privilege.sudo = lambda argv, **_kw: (calls.append(argv), (7, ""))[1]
+repos.lock_holder = lambda: "9915 packagekitd"
+began = time.monotonic()
+with contextlib.redirect_stdout(out):
+    first, _ = privilege.root("repo-refresh-all", {"import_keys": False})
+    second, _ = privilege.root("cache-clean")
+took = time.monotonic() - began
+ok = (first, second) == (7, 7) and len(calls) == 2 and out.getvalue().count("Waiting") == 1
+raise SystemExit(0 if ok and took < 5 else f"calls={len(calls)} took={took:.1f} out={out.getvalue()!r}")'
+py_case "LOCK_RETRY_OPS is every run op whose argv runs zypper" '
+import os
+from oneup.engine import rootops
+sample = {"b": False, "s": "oss", "u": 120, "as": ["pkg"]}
+want = set()
+for name, op in rootops.OPS.items():
+    try:
+        argv = rootops.build(name, {k: sample[sig] for k, sig in op.args.items()})
+    except rootops.Invalid:
+        continue
+    if any(os.path.basename(a) == "zypper" for a in argv) and name != "check-dry-run":
+        want.add(name)
+got = set(rootops.LOCK_RETRY_OPS)
+raise SystemExit(0 if got == want else f"missing={want - got} extra={got - want}")'
+
 # ONEUP-0401: the rule granted the budget as typed (`timeout 0120 zypper *`) while the
 # call sent `timeout 120`, so a passwordless user met a prompt mid-refresh.
 echo "TEST: the refresh budget is spelt the same in the rule and in the call"

@@ -12,6 +12,11 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The system update no longer fails when the desktop's updater (PackageKit) wakes up during a run** (ONEUP-0458)
+  A zypper step that finds the package lock taken now waits for the other
+  program to finish, up to three and a half minutes, and then runs again.
+  Stop still ends the wait at once.
+
 - **"Skip this source" now works on a software source set to `enabled=always`; before, it silently did nothing** (ONEUP-0433)
 
 - **A run started with a mistyped step name no longer leaves a following window waiting for a step that will never run** (ONEUP-0436)
