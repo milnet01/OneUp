@@ -1255,6 +1255,12 @@ def main() -> int:
         run._tick_activity(wC2)
         check("leftovers the transaction does not need never run past the total",
               "86.4 MiB of 86.4 MiB" in wC2.activity.text())
+        # zypper rounds each package's size, so their sum can pass its own total
+        # (609.1 MiB of 609.0 MiB, seen 2026-11-25). The figure stops at the total too.
+        run.handle_line(wC2, "@@PROGRESS@@|system|2|0|download|90696966|90596966")
+        run._tick_activity(wC2)
+        check("zypper's summed sizes never run past the total (ONEUP-0455)",
+              "86.4 MiB of 86.4 MiB" in wC2.activity.text())
         (Path(cache_dir) / "pkg2.rpm").unlink()
         (Path(cache_dir) / "pkg3.rpm").unlink()
         # The cache holds thousands of files by mid-download, and PROGRESS markers can

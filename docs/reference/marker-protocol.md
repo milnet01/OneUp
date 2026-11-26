@@ -189,7 +189,7 @@ The marker that stops a working download looking like a hang (ONEUP-0040/0048).
 - **The two byte fields are optional**, present only in the download phase once zypper has
   printed a size. **`bytes_total` of 0 means "not known yet."** Throughout the download phase the
   window also weighs `/var/cache/zypp/packages` itself — world-readable, so no root is
-  involved — and shows whichever figure is larger.
+  involved — and shows whichever figure is larger, never more than `bytes_total`.
 - The engine derives all of this by parsing zypper's own output, which is why `LC_ALL=C` is
   pinned on the transaction: the three wordings (`Preloading:`, `Retrieving: … (12/77)`,
   `( 7/77) Installing:`) would otherwise change on a non-English desktop.

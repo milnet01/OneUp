@@ -835,6 +835,10 @@ def _tick_activity(win, reweigh: bool = True):
             # from the first figure, which already holds the baseline.
             have = min(win._dl_base + win._dl_grown, win._dl_total)
         got = max(got, have)
+        if win._dl_total:
+            # zypper rounds each package's size, so their sum can pass its own total
+            # (609.1 of 609.0 MiB, seen 2026-11-25): capped like the weight (ONEUP-0455).
+            got = min(got, win._dl_total)
         win._dl_got = got
     win._dl_rate = 0.0
     if got > 0:

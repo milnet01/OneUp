@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ONEUP=458 -->
+<!-- ants-roadmap-id-high-water: ONEUP=459 -->
 
 # OneUp Roadmap
 
@@ -12980,7 +12980,7 @@ when complete (that document's §7).
   Kind: ux.
   Source: verify-delivery-2026-11-23 (ONEUP-0440 VM run).
 
-- 📋 [ONEUP-0455] **The download figure can read more than its total, e.g. 609.1 MiB of 609.0 MiB.**
+- ✅ [ONEUP-0455] **The download figure can read more than its total, e.g. 609.1 MiB of 609.0 MiB.**
   Seen 2026-11-25 on a 128-package run. run._tick_activity takes the larger
   of the summed per-package sizes (PROGRESS bytes, from proc.py's
   Retrieving: sum) and the cache weight; the weight is capped at
@@ -12988,6 +12988,9 @@ when complete (that document's §7).
   can pass its own total. Fix: cap the shown figure at the total, as
   marker-protocol.md §4.3 already says of the weight; regression test
   feeds bytes above the total.
+  Fixed 2026-11-26: run._tick_activity caps the shown figure at
+  bytes_total in the download phase; marker-protocol.md §4.3 says so.
+  Regression in gui-smoke.py, seen red on HEAD.
   **Layman:** While updates download, OneUp can say it has fetched slightly more than the total it announced.
   Kind: fix.
   Source: user-report-2026-11-25.
@@ -13036,3 +13039,17 @@ when complete (that document's §7).
   Kind: fix.
   Source: user-report-2026-11-26.
   Evidence: /home/ants/Pictures/Screenshots/Screenshot_20261126_111718.png, /home/ants/.local/state/oneup/logs/2026-11-26_085404.log
+
+- 📋 [ONEUP-0459] **Restarting services after an update asks for the password even on the service route.**
+  Reported 2026-11-26 on the packaged install. banners.restart_services runs
+  `pkexec systemctl restart <units>` from the window, so it always asks;
+  rootops' table has `restart-list` (zypper ps -sss) but no restart op.
+  Plan: a `service-restart` row in rootops (units validated as
+  _service_units and _running do, session-critical units refused there
+  too), an engine action the window calls on the service route, and
+  pkexec kept for the sudo route and the AppImage. Amends ONEUP-0249's op
+  table; security.md §4.6 binds what may be restarted.
+  **Layman:** After an update that needed some services restarted, the Restart button asked for the password again although the update itself had not.
+  Kind: enhancement.
+  Source: user-report-2026-11-26.
+  Lanes: gui, engine, service.

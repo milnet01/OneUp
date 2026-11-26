@@ -12,6 +12,8 @@ All notable changes to OneUp are documented here. The format follows
 
 ### Fixed
 
+- **The download figure no longer reads more than its total, such as 609.1 MiB of 609.0 MiB.** (ONEUP-0455)
+
 - **Turning Passwordless on or off now asks for the password in a box that says so, not one saying it is for updating.** (ONEUP-0441)
 
 - **The system update no longer fails when the desktop's updater (PackageKit) wakes up during a run** (ONEUP-0458)
