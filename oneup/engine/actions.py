@@ -491,6 +491,7 @@ def grant_auth() -> int:
         markers.hint("temp-file-failed", say="Could not create a temporary file.")
         return 1
     try:
+        privilege.ask_as(privilege.GRANT_PROMPT)
         privilege.sudo_init()
         # Validate the generated rule in ISOLATION before it can affect the live
         # policy: a syntactically broken file under /etc/sudoers.d can lock the
@@ -546,6 +547,7 @@ def revoke_auth() -> int:
     reach. With the override set the sweep collapses to that one path — the
     override exists so the suite never touches a real system directory.
     """
+    privilege.ask_as(privilege.REVOKE_PROMPT)
     privilege.sudo_init()
     if os.environ.get("ONEUP_GUARD_FILE"):
         guards = [str(GUARD_FILE)]

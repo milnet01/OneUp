@@ -120,7 +120,7 @@ def install_environment() -> None:
     which is what made "Show download size" fail (ONEUP-0036).
     """
     os.environ["SUDO_ASKPASS"] = ASKPASS
-    os.environ["SUDO_PROMPT"] = SUDO_PROMPT
+    os.environ["SUDO_PROMPT"] = _sudo_prompt
 
 
 # sudo_init's own prompt label, and it is NOT `SUDO_PROMPT` above. The Bash
@@ -138,6 +138,21 @@ _PROMPT_MARKS = (
     "System Updater: authenticate to update the system",
     "OneUp needs administrator rights to update this system.",
 )
+
+# Turning Passwordless on or off installs nothing, so a box saying the password is "to
+# install updates" or "to continue updating" misleads (ONEUP-0441). Each run asks under
+# one label, set by `ask_as`. They share the text before %p with the prompts above, so
+# the reaper already matches them.
+GRANT_PROMPT = "OneUp needs the password for %p to turn Passwordless on. Password: "
+REVOKE_PROMPT = "OneUp needs the password for %p to turn Passwordless off. Password: "
+_sudo_prompt = SUDO_PROMPT
+_validate_prompt = VALIDATE_PROMPT
+
+
+def ask_as(prompt: str) -> None:
+    """Label every password prompt from here on with `prompt`: the validate and the rest."""
+    global _sudo_prompt, _validate_prompt
+    _sudo_prompt = _validate_prompt = prompt
 
 
 # Set once sudo_init has asked through the password box. From then on a privileged call
@@ -210,7 +225,7 @@ def sudo_init() -> None:
     # sudo says — a prompt, a refusal, "a terminal is required" — reaches the
     # run's own stderr and its log. Capturing it silently swallows the one
     # message a user who cancelled the dialog has to go on.
-    rc, _ = proc.run(["sudo", *(["-A"] if use_box else []), "-p", VALIDATE_PROMPT, "-v"],
+    rc, _ = proc.run(["sudo", *(["-A"] if use_box else []), "-p", _validate_prompt, "-v"],
                      stream=True)
     if rc != 0:
         if use_box and _askpass_cannot_start():
